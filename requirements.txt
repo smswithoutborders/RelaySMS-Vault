@@ -10,7 +10,7 @@ mod_wsgi==5.0.1
 mysqlclient==2.2.4
 mysql-connector-python==9.0.0
 nest-asyncio==1.6.0
-peewee==3.17.6
+peewee==3.17.7
 phonenumbers==8.13.47
 pycryptodome==3.21.0
 pytest==8.3.3
