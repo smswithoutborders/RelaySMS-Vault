@@ -149,6 +149,8 @@ message DecryptPayloadResponse {
   string message = 2;
   // Indicates whether the operation was successful.
   bool success = 3;
+  // The country code of the entity.
+  string country_code = 4; 
 }
 
 // Request message for encrypting payload.
