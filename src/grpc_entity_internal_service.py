@@ -508,7 +508,6 @@ class EntityInternalService(vault_pb2_grpc.EntityInternalServicer):
                 message="Successfully encrypted payload.",
                 payload_ciphertext=encoded_content,
                 success=True,
-                country_code=entity_obj.country_code,
             )
 
         try:
