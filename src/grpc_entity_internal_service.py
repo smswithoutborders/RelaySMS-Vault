@@ -406,6 +406,7 @@ class EntityInternalService(vault_pb2_grpc.EntityInternalServicer):
                 message="Successfully decrypted payload",
                 success=True,
                 payload_plaintext=content_plaintext,
+                country_code=decrypt_and_decode(entity_obj.country_code),
             )
 
         try:
