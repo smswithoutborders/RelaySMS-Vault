@@ -1,8 +1,4 @@
-"""
-This program is free software: you can redistribute it under the terms
-of the GNU General Public License, v. 3.0. If a copy of the GNU General
-Public License was not distributed with this file, see <https://www.gnu.org/licenses/>.
-"""
+"""gRPC Entity Internal Service"""
 
 import base64
 import re
@@ -17,7 +13,7 @@ import vault_pb2_grpc
 from src import signups
 from src.entity import create_entity, find_entity
 from src.tokens import fetch_entity_tokens, create_entity_token, find_token
-from src.crypto import generate_hmac, decrypt_aes
+from src.crypto import generate_hmac
 from src.otp_service import send_otp, verify_otp, create_inapp_otp
 from src.utils import (
     load_key,
@@ -38,15 +34,13 @@ from src.relaysms_payload import (
     encrypt_payload,
     encode_relay_sms_payload,
 )
-from src.db_models import StaticKeypairs
 from base_logger import get_logger
 
 logger = get_logger(__name__)
 
-ENCRYPTION_KEY = load_key(get_configs("SHARED_KEY", strict=True), 32)
-HASHING_KEY = load_key(get_configs("HASHING_SALT", strict=True), 32)
+HASHING_KEY = load_key(get_configs("HASHING_SALT"), 32)
 SUPPORTED_PLATFORMS = get_supported_platforms()
-MOCK_OTP = get_configs("MOCK_OTP", default_value="true")
+MOCK_OTP = get_configs("MOCK_OTP")
 MOCK_OTP = MOCK_OTP.lower() == "true" if MOCK_OTP is not None else False
 
 
@@ -261,7 +255,7 @@ class EntityInternalService(vault_pb2_grpc.EntityInternalServicer):
 
             if token:
                 token.account_tokens = encrypt_and_encode(request.token)
-                token.save(only=["account_tokens"])
+                token.save()
                 logger.info("Token overwritten successfully.")
 
                 return self.handle_create_grpc_error_response(
@@ -396,16 +390,17 @@ class EntityInternalService(vault_pb2_grpc.EntityInternalServicer):
                 )
 
             entity_obj.server_state = state.serialize()
-            entity_obj.save(only=["server_state"])
+            entity_obj.save()
             logger.info(
                 "Successfully decrypted payload for %s",
                 entity_obj.eid,
             )
-
+            country_code=decrypt_and_decode(entity_obj.country_code)
             return response(
                 message="Successfully decrypted payload",
                 success=True,
                 payload_plaintext=content_plaintext,
+                country_code=country_code
             )
 
         try:
@@ -503,7 +498,7 @@ class EntityInternalService(vault_pb2_grpc.EntityInternalServicer):
                 )
 
             entity_obj.server_state = state.serialize()
-            entity_obj.save(only=["server_state"])
+            entity_obj.save()
             logger.info(
                 "Successfully encrypted payload for %s",
                 entity_obj.eid,
@@ -513,6 +508,7 @@ class EntityInternalService(vault_pb2_grpc.EntityInternalServicer):
                 message="Successfully encrypted payload.",
                 payload_ciphertext=encoded_content,
                 success=True,
+                country_code=entity_obj.country_code,
             )
 
         try:
@@ -735,7 +731,7 @@ class EntityInternalService(vault_pb2_grpc.EntityInternalServicer):
                 )
 
             existing_tokens[0].account_tokens = encrypt_and_encode(request.token)
-            existing_tokens[0].save(only=["account_tokens"])
+            existing_tokens[0].save()
             logger.info("Successfully updated token for %s", entity_obj.eid)
 
             return response(
@@ -846,14 +842,11 @@ class EntityInternalService(vault_pb2_grpc.EntityInternalServicer):
                 )
 
             entity_obj.is_bridge_enabled = True
-            entity_obj.save(only=["is_bridge_enabled"])
+            entity_obj.save()
 
             return response(message="Bridge Entity Created Successfully", success=True)
 
         def initiate_creation(phone_number_hash, eid, entity_obj=None):
-            if request.server_pub_key_identifier:
-                return handle_bridge_entity_creation(phone_number_hash, eid, entity_obj)
-
             invalid_fields_response = self.handle_request_field_validation(
                 context,
                 request,
@@ -874,9 +867,7 @@ class EntityInternalService(vault_pb2_grpc.EntityInternalServicer):
                 entity_obj.client_publish_pub_key = request.client_publish_pub_key
                 entity_obj.publish_keypair = entity_publish_keypair.serialize()
                 entity_obj.server_state = None
-                entity_obj.save(
-                    only=["client_publish_pub_key", "publish_keypair", "server_state"]
-                )
+                entity_obj.save()
             else:
                 fields = {
                     "eid": eid,
@@ -931,89 +922,6 @@ class EntityInternalService(vault_pb2_grpc.EntityInternalServicer):
             signups.create_record(country_code=request.country_code, source="bridges")
 
             return response(success=True, message=message_body if MOCK_OTP else message)
-
-        # This is for bridge_server payload version >=1
-        def handle_bridge_entity_creation(phone_number_hash, eid, entity_obj=None):
-            invalid_fields_response = self.handle_request_field_validation(
-                context,
-                request,
-                response,
-                [
-                    "country_code",
-                    "client_publish_pub_key",
-                    "server_pub_key_identifier",
-                    "server_pub_key_version",
-                ],
-            )
-            if invalid_fields_response:
-                return invalid_fields_response
-
-            server_publish_keypair = StaticKeypairs.get_keypair(
-                request.server_pub_key_identifier, request.server_pub_key_version
-            )
-
-            if not server_publish_keypair or server_publish_keypair.status != "active":
-                status = "not found" if not server_publish_keypair else "not active"
-                return self.handle_create_grpc_error_response(
-                    context,
-                    response,
-                    "The server public key identifier "
-                    f"'{request.server_pub_key_identifier}' for version "
-                    f"{request.server_pub_key_version} is {status}.",
-                    grpc.StatusCode.NOT_FOUND,
-                )
-
-            server_publish_keypair_plaintext = decrypt_aes(
-                ENCRYPTION_KEY,
-                server_publish_keypair.keypair_bytes,
-                is_bytes=True,
-            )
-            if entity_obj:
-                new_server_pub_key = load_keypair_object(
-                    server_publish_keypair_plaintext
-                ).get_public_key()
-                current_server_pub_key = load_keypair_object(
-                    entity_obj.publish_keypair
-                ).get_public_key()
-
-                if (new_server_pub_key != current_server_pub_key) or (
-                    request.client_publish_pub_key != entity_obj.client_publish_pub_key
-                ):
-                    logger.info(
-                        "Detected new public keys. Overwriting existing keys for the entity."
-                    )
-                    clear_keystore(eid)
-                    entity_obj.client_publish_pub_key = request.client_publish_pub_key
-                    entity_obj.publish_keypair = server_publish_keypair_plaintext
-                    entity_obj.server_state = None
-                    entity_obj.save(
-                        only=[
-                            "client_publish_pub_key",
-                            "publish_keypair",
-                            "server_state",
-                        ]
-                    )
-                    logger.info("Successfully reauthenticated entity.")
-                    return response(
-                        success=True, message="Successfully reauthenticated entity."
-                    )
-
-                logger.info("Successfully verified entity.")
-                return response(success=True, message="Successfully verified entity.")
-
-            create_entity(
-                eid=eid,
-                phone_number_hash=phone_number_hash,
-                password_hash=None,
-                country_code=encrypt_and_encode(request.country_code),
-                client_publish_pub_key=request.client_publish_pub_key,
-                publish_keypair=server_publish_keypair_plaintext,
-                is_bridge_enabled=True,
-            )
-            signups.create_record(country_code=request.country_code, source="bridges")
-
-            logger.info("Successfully created entity.")
-            return response(success=True, message="Successfully created entity.")
 
         try:
             invalid_fields_response = self.handle_request_field_validation(
