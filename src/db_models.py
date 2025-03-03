@@ -16,6 +16,7 @@ from peewee import (
     ForeignKeyField,
     BlobField,
     BooleanField,
+    SQL,
 )
 from src.db import connect
 from src.utils import create_tables, get_configs
@@ -37,6 +38,7 @@ class Entity(Model):
     device_id_keypair = BlobField(null=True)
     server_state = BlobField(null=True)
     is_bridge_enabled = BooleanField(default=True)
+    language = CharField(null=True, constraints=[SQL("DEFAULT 'en'")])
     date_created = DateTimeField(default=datetime.datetime.now)
 
     class Meta:
