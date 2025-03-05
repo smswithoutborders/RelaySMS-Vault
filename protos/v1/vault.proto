@@ -314,6 +314,8 @@ message AuthenticateBridgeEntityResponse {
   string message = 1;
   // Indicates whether the operation was successful.
   bool success = 2;
+  // The preferred language of the entity in ISO 639-1 format.
+  string language = 3;
 }
 
 // Service for managing entities.

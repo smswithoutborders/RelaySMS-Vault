@@ -1083,11 +1083,17 @@ class EntityInternalService(vault_pb2_grpc.EntityInternalServicer):
                     grpc.StatusCode.UNAUTHENTICATED,
                 )
 
-            if entity_obj.language != request.language:
-                entity_obj.language = request.language or DEFAULT_LANGUAGE
+            entity_language = request.language
+
+            if entity_language and entity_obj.language != entity_language:
+                entity_obj.language = entity_language
                 entity_obj.save(only=["language"])
 
-            return response(success=True, message="Authentication successful.")
+            return response(
+                success=True,
+                message="Authentication successful.",
+                language=entity_obj.language,
+            )
 
         except Exception as e:
             return self.handle_create_grpc_error_response(
