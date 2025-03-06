@@ -46,8 +46,8 @@ logger = get_logger(__name__)
 ENCRYPTION_KEY = load_key(get_configs("SHARED_KEY", strict=True), 32)
 HASHING_KEY = load_key(get_configs("HASHING_SALT", strict=True), 32)
 SUPPORTED_PLATFORMS = get_supported_platforms()
-MOCK_OTP = get_configs("MOCK_OTP", default_value="true")
-MOCK_OTP = MOCK_OTP.lower() == "true" if MOCK_OTP is not None else False
+MOCK_OTP = (get_configs("MOCK_OTP", default_value="true") or "").lower() == "true"
+DEFAULT_LANGUAGE = "en"
 
 
 class EntityInternalService(vault_pb2_grpc.EntityInternalServicer):
@@ -939,18 +939,14 @@ class EntityInternalService(vault_pb2_grpc.EntityInternalServicer):
                 context,
                 request,
                 response,
-                [
-                    "country_code",
-                    "client_publish_pub_key",
-                    "server_pub_key_identifier",
-                    "server_pub_key_version",
-                ],
+                ["country_code", "client_publish_pub_key", "server_pub_key_identifier"],
             )
             if invalid_fields_response:
                 return invalid_fields_response
 
             server_publish_keypair = StaticKeypairs.get_keypair(
-                request.server_pub_key_identifier, request.server_pub_key_version
+                request.server_pub_key_identifier,
+                request.server_pub_key_version or "v1",
             )
 
             if not server_publish_keypair or server_publish_keypair.status != "active":
@@ -987,17 +983,23 @@ class EntityInternalService(vault_pb2_grpc.EntityInternalServicer):
                     entity_obj.client_publish_pub_key = request.client_publish_pub_key
                     entity_obj.publish_keypair = server_publish_keypair_plaintext
                     entity_obj.server_state = None
+                    entity_obj.language = request.language or DEFAULT_LANGUAGE
                     entity_obj.save(
                         only=[
                             "client_publish_pub_key",
                             "publish_keypair",
                             "server_state",
+                            "language",
                         ]
                     )
                     logger.info("Successfully reauthenticated entity.")
                     return response(
                         success=True, message="Successfully reauthenticated entity."
                     )
+
+                if entity_obj.language != request.language:
+                    entity_obj.language = request.language or DEFAULT_LANGUAGE
+                    entity_obj.save(only=["language"])
 
                 logger.info("Successfully verified entity.")
                 return response(success=True, message="Successfully verified entity.")
@@ -1010,6 +1012,7 @@ class EntityInternalService(vault_pb2_grpc.EntityInternalServicer):
                 client_publish_pub_key=request.client_publish_pub_key,
                 publish_keypair=server_publish_keypair_plaintext,
                 is_bridge_enabled=True,
+                language=request.language or DEFAULT_LANGUAGE,
             )
             signups.create_record(country_code=request.country_code, source="bridges")
 
@@ -1080,7 +1083,17 @@ class EntityInternalService(vault_pb2_grpc.EntityInternalServicer):
                     grpc.StatusCode.UNAUTHENTICATED,
                 )
 
-            return response(success=True, message="Authentication successful.")
+            entity_language = request.language
+
+            if entity_language and entity_obj.language != entity_language:
+                entity_obj.language = entity_language
+                entity_obj.save(only=["language"])
+
+            return response(
+                success=True,
+                message="Authentication successful.",
+                language=entity_obj.language,
+            )
 
         except Exception as e:
             return self.handle_create_grpc_error_response(
