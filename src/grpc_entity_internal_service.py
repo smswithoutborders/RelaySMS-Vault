@@ -983,12 +983,14 @@ class EntityInternalService(vault_pb2_grpc.EntityInternalServicer):
                     entity_obj.client_publish_pub_key = request.client_publish_pub_key
                     entity_obj.publish_keypair = server_publish_keypair_plaintext
                     entity_obj.server_state = None
+                    entity_obj.is_bridge_enabled = True
                     entity_obj.language = request.language or DEFAULT_LANGUAGE
                     entity_obj.save(
                         only=[
                             "client_publish_pub_key",
                             "publish_keypair",
                             "server_state",
+                            "is_bridge_enabled",
                             "language",
                         ]
                     )
