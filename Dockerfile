@@ -1,4 +1,4 @@
-FROM python:3.13.1-slim as base
+FROM python:3.13.2-slim as base
 
 WORKDIR /vault
 
