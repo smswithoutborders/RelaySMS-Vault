@@ -249,8 +249,7 @@ def load_keypair_object(keypair):
     Returns:
         x25519: Deserialized x25519 keypair object.
     """
-    keypair_obj = x25519()
-    return keypair_obj.deserialize(keypair)
+    return x25519().deserialize(keypair)
 
 
 def get_shared_key(keystore_path, pnt_keystore, secret_key, peer_pub_key):

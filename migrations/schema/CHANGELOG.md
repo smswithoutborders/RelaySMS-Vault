@@ -1,5 +1,11 @@
 # Changelog
 
+## [v1.1.0] - 2025-03-03
+
+### Added
+
+- Added a new column `language` of type `CharField(null=True, constraints=[SQL("DEFAULT 'en'")])` to the `entities` table.
+
 ## [v1.0.2] - 2024-10-10
 
 ### Changed

@@ -1,5 +1,11 @@
-"""API V3 Blueprint"""
+"""
+This program is free software: you can redistribute it under the terms
+of the GNU General Public License, v. 3.0. If a copy of the GNU General
+Public License was not distributed with this file, see <https://www.gnu.org/licenses/>.
+"""
 
+import os
+import json
 from datetime import datetime
 import calendar
 
@@ -11,7 +17,12 @@ from phonenumbers import geocoder
 
 from src.db import connect
 from src.entity import fetch_all_entities
-from src.utils import decrypt_and_decode, validate_metrics_args, filter_dict
+from src.utils import (
+    decrypt_and_decode,
+    validate_metrics_args,
+    filter_dict,
+    get_configs,
+)
 from src.user_metrics import get_signup_users, get_retained_users
 from base_logger import get_logger
 
@@ -21,6 +32,9 @@ CORS(v3_blueprint)
 database = connect()
 
 logger = get_logger(__name__)
+
+STATIC_KEYSTORE_PATH = get_configs("STATIC_X25519_KEYSTORE_PATH", strict=True)
+DEFAULT_EXPORT_PATH = os.path.join(STATIC_KEYSTORE_PATH, "exported_public_keys.json")
 
 
 def set_security_headers(response):
@@ -252,6 +266,24 @@ def retained_users():
 
     logger.info("Successfully fetched retained metrics.")
     return jsonify(result)
+
+
+@v3_blueprint.route("/keys/static-x25519", methods=["GET"])
+def fetch_static_x25519_keys():
+    """Fetch static x25519 public keys from a JSON file."""
+
+    try:
+        with open(DEFAULT_EXPORT_PATH, "r", encoding="utf-8") as file:
+            static_keys = json.load(file)
+    except FileNotFoundError as exc:
+        logger.error("File not found: %s", DEFAULT_EXPORT_PATH)
+        raise NotFound("Static public keys not found") from exc
+    except json.JSONDecodeError as exc:
+        logger.error("Invalid JSON format in file: %s", DEFAULT_EXPORT_PATH)
+        raise BadRequest("Invalid key file format") from exc
+
+    logger.info("Successfully retrieved static x25519 public keys.")
+    return jsonify(static_keys)
 
 
 @v3_blueprint.errorhandler(BadRequest)

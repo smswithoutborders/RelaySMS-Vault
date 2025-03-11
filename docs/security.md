@@ -1,48 +1,40 @@
 # Security
 
-## Password Security
+This document outlines the cryptographic methods used in the RelaySMS Vault. All cryptographic operations are defined in the [`crypto.py`](../src/crypto.py) file.
 
-Passwords are secured using HMAC-512. HMAC
-([Hash-based Message Authentication Code](https://en.wikipedia.org/wiki/HMAC))
-is a MAC defined in [RFC2104](http://www.ietf.org/rfc/rfc2104.txt) and
-[FIPS-198](http://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.198-1.pdf) and
-constructed using a cryptographic hash algorithm.
+## Cryptographic Methods
 
-## Data Security
+### AES Encryption
 
-Data is secured using AES-CBC. AES
-([Advanced Encryption Standard](http://en.wikipedia.org/wiki/Advanced_Encryption_Standard))
-is a symmetric block cipher standardized by
-[NIST](http://csrc.nist.gov/publications/fips/fips197/fips-197.pdf) . It has a
-fixed data block size of 16 bytes. Its keys can be 128, 192, or 256 bits long.
+**Advanced Encryption Standard (AES)** is used for secure data storage.
 
-## Cryptographic Methods Used in the Vault
+- **Key Size**: 256 bits (32 bytes)
+- **Mode of Operation**: AES-EAX
+- **Purpose**: Encrypts and decrypts data at rest.
+- **Reference**: [NIST AES Specification](https://www.nist.gov/publications/advanced-encryption-standard-aes)
 
-These cryptographic methods are implemented in the [crypto.py](../src/crypto.py)
-file within the vault.
+### HMAC for Integrity Verification
 
-### 1. AES Encryption
-
-**AES (Advanced Encryption Standard)**:
-
-- **Key Size**: 32 bytes
-- **Mode of Operation**: AES.MODE_EAX
-- **Usage**:
-  - Encrypts and decrypts data at rest in the vault.
-
-### 2. HMAC Generation
-
-**HMAC (Hash-based Message Authentication Code)**:
+**Hash-based Message Authentication Code (HMAC)** ensures data integrity.
 
 - **Algorithm**: SHA-512
-- **Key Size**: 32 bytes
-- **Usage**:
-  - Generates and verifies HMACs for unique values in the vault.
+- **Key Size**: 256 bits (32 bytes)
+- **Purpose**: Verifies data authenticity.
+- **Reference**: [RFC 2104 - HMAC](https://datatracker.ietf.org/doc/html/rfc2104)
 
-### 3. Fernet Encryption
+### Fernet Encryption
 
-**Fernet encryption**:
+**Fernet encryption** is used for token encryption.
 
-- **Key Size**: 32 bytes
-- **Usage**:
-  - Encrypts and decrypts identity tokens used by the vault.
+- **Key Size**: 256 bits (32 bytes)
+- **Purpose**: Encrypts and decrypts identity tokens.
+- **Reference**: [Fernet Cryptography Documentation](https://cryptography.io/en/latest/fernet/)
+
+### Message Encryption
+
+**Signal Double Ratchet Algorithm** encrypts and decrypts messages.
+
+- **Key Exchange**: X25519 public key exchange.
+- **Algorithm**: Double Ratchet for message encryption.
+- **Purpose**: Secures message transmission.
+- **Reference**: [Signal Protocol Documentation](https://signal.org/docs/specifications/doubleratchet/)

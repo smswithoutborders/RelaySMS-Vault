@@ -1,6 +1,11 @@
-"""Peewee Database ORM Models."""
+"""
+This program is free software: you can redistribute it under the terms
+of the GNU General Public License, v. 3.0. If a copy of the GNU General
+Public License was not distributed with this file, see <https://www.gnu.org/licenses/>.
+"""
 
 import datetime
+from enum import Enum
 from peewee import (
     Model,
     CharField,
@@ -11,10 +16,10 @@ from peewee import (
     ForeignKeyField,
     BlobField,
     BooleanField,
+    SQL,
 )
 from src.db import connect
-from src.utils import create_tables
-from settings import Configurations
+from src.utils import create_tables, get_configs
 
 database = connect()
 
@@ -33,6 +38,7 @@ class Entity(Model):
     device_id_keypair = BlobField(null=True)
     server_state = BlobField(null=True)
     is_bridge_enabled = BooleanField(default=True)
+    language = CharField(null=True, default="en", constraints=[SQL("DEFAULT 'en'")])
     date_created = DateTimeField(default=datetime.datetime.now)
 
     class Meta:
@@ -144,5 +150,94 @@ class Signups(Model):
         table_name = "signups"
 
 
-if Configurations.MODE in ("production", "development"):
-    create_tables([Entity, OTPRateLimit, Token, PasswordRateLimit, OTP, Signups])
+class KeypairStatus(Enum):
+    """
+    Enum representing the status of a keypair.
+    """
+
+    ACTIVE = "active"
+    INACTIVE = "inactive"
+    ARCHIVED = "archived"
+
+
+class StaticKeypairs(Model):
+    """Model representing static x25519 keypairs."""
+
+    kid = IntegerField()
+    keypair_bytes = BlobField()
+    status = CharField(
+        choices=[(status.value, status.value) for status in KeypairStatus]
+    )
+    date_last_used = DateTimeField(null=True)
+    date_created = DateTimeField(default=datetime.datetime.now)
+    usage_count = IntegerField(default=0)
+    version = CharField()
+
+    class Meta:
+        """Meta class to define database connection."""
+
+        database = database
+        table_name = "static_keypairs"
+        indexes = ((("kid", "status", "version"), True),)
+
+    @classmethod
+    def create_keypair(cls, kid, keypair_bytes, status, version):
+        """Creates and stores a new keypair safely."""
+        if status not in KeypairStatus._value2member_map_:
+            raise ValueError(
+                f"Invalid status: {status}. Allowed: {[s.value for s in KeypairStatus]}"
+            )
+        with database.atomic():
+            return cls.create(
+                kid=kid, keypair_bytes=keypair_bytes, status=status, version=version
+            )
+
+    @classmethod
+    def get_keypairs(cls, **criteria):
+        """Retrieves keypairs based on dynamic filtering criteria."""
+        query = cls.select()
+        if criteria:
+            for field, value in criteria.items():
+                query = query.where(getattr(cls, field) == value)
+        return list(query)
+
+    @classmethod
+    def get_keypair(cls, kid, version):
+        """Retrieves a keypair by its ID and version."""
+        keypair = cls.get_or_none(cls.kid == kid, cls.version == version)
+        if keypair:
+            with database.atomic():
+                keypair.usage_count += 1
+                keypair.date_last_used = datetime.datetime.now()
+                keypair.save(only=["date_last_used", "usage_count"])
+        return keypair
+
+    @classmethod
+    def keypair_exists(cls, kid):
+        """Checks if a keypair exists by ID."""
+        return cls.select().where(cls.kid == kid).exists()
+
+    @classmethod
+    def update_status(cls, kid, status):
+        """Updates the status of a keypair safely."""
+        if status not in KeypairStatus._value2member_map_:
+            raise ValueError(
+                f"Invalid status: {status}. Allowed: {[s.value for s in KeypairStatus]}"
+            )
+        with database.atomic():
+            return cls.update(status=status).where(cls.kid == kid).execute()
+
+    @classmethod
+    def delete_keypair(cls, kid):
+        """Deletes a keypair safely."""
+        with database.atomic():
+            keypair = cls.get_or_none(cls.kid == kid)
+            if keypair:
+                return keypair.delete_instance()
+            return None
+
+
+if get_configs("MODE", default_value="development") in ("production", "development"):
+    create_tables(
+        [Entity, OTPRateLimit, Token, PasswordRateLimit, OTP, Signups, StaticKeypairs]
+    )

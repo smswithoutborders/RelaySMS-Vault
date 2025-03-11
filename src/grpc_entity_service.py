@@ -1,4 +1,8 @@
-"""gRPC Entity Service"""
+"""
+This program is free software: you can redistribute it under the terms
+of the GNU General Public License, v. 3.0. If a copy of the GNU General
+Public License was not distributed with this file, see <https://www.gnu.org/licenses/>.
+"""
 
 import base64
 import re
@@ -38,7 +42,7 @@ from base_logger import get_logger
 
 logger = get_logger(__name__)
 
-HASHING_KEY = load_key(get_configs("HASHING_SALT"), 32)
+HASHING_KEY = load_key(get_configs("HASHING_SALT", strict=True), 32)
 
 
 class EntityService(vault_pb2_grpc.EntityServicer):

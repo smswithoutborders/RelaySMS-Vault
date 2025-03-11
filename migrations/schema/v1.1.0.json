@@ -1,0 +1,8 @@
+[
+  {
+    "action": "add_column",
+    "table": "entities",
+    "column_name": "language",
+    "field": "CharField(null=True, constraints=[SQL(\"DEFAULT 'en'\")])"
+  }
+]

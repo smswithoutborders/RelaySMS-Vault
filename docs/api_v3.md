@@ -8,7 +8,66 @@ https://vault.smswithoutborders.com
 
 ## **Endpoints**
 
-### **1. Get Signup Metrics**
+### **1. Get Static x25519 Public Keys**
+
+Retrieve static x25519 public keys from the system.
+
+#### **Endpoint**
+
+```
+GET /v3/keys/static-x25519
+```
+
+#### **Response**
+
+**Status Code: 200 OK**
+
+**Response Body:**
+
+> The status can be `active`, `inactive`, or `archived`.
+
+```json
+{
+  "v1": [
+    {
+      "keypair": "pqkZPzH6jqZN5n45RuY91+k5ESxijfYOR+caOALJe1I=",
+      "kid": 0,
+      "status": "active"
+    },
+    {
+      "keypair": "gh7eH6GT5l+wXnz0z/nqMu/BhSlyz7FxqFoneaPbS3E=",
+      "kid": 1,
+      "status": "active"
+    }
+  ],
+  "v2": [
+    {
+      "keypair": "NJuBTMkQzLors6ZCok+ZBDWOXSB1NDhjKGKGchd1q1k=",
+      "kid": 0,
+      "status": "active"
+    },
+    {
+      "keypair": "TdKzENsuN6LHlf6XalCEeE32lstF3KoVy1xi443WDAg=",
+      "kid": 1,
+      "status": "active"
+    }
+  ]
+}
+```
+
+**Status Code: 500 Internal Server Error**
+
+**Response Body:**
+
+```json
+{
+  "error": "Oops! Something went wrong. Please try again later."
+}
+```
+
+---
+
+### **2. Get Signup Metrics**
 
 Retrieve metrics for user signups within a specified date range, with options for filtering and pagination.
 
@@ -98,7 +157,7 @@ GET /v3/metrics/signup
 
 ---
 
-### **2. Get Retained User Metrics**
+### **3. Get Retained User Metrics**
 
 Retrieve metrics for retained (active) users within a specified date range, with options for filtering and pagination.
 

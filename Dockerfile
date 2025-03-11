@@ -24,6 +24,8 @@ RUN pip install --disable-pip-version-check --quiet --no-cache-dir --force-reins
 
 COPY . .
 
+RUN make build-setup
+
 FROM base AS production
 
 ENV MODE=production

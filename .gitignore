@@ -133,7 +133,6 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
-
 # protoc
 *_pb2_grpc.py*
 *_pb2.py*
@@ -151,3 +150,6 @@ dmypy.json
 
 # Platforms info
 platforms.json
+
+# Static public keys info
+static_x25519_pub_keys.json

@@ -1,14 +1,16 @@
-"""Vault gRPC server"""
+"""
+This program is free software: you can redistribute it under the terms
+of the GNU General Public License, v. 3.0. If a copy of the GNU General
+Public License was not distributed with this file, see <https://www.gnu.org/licenses/>.
+"""
 
 import os
 from concurrent import futures
-from datetime import datetime
 
 import grpc
 from grpc_interceptor import ServerInterceptor
 import vault_pb2_grpc
 
-from settings import Configurations
 from src.utils import get_configs
 from src.grpc_entity_service import EntityService
 from base_logger import get_logger
@@ -30,27 +32,18 @@ class LoggingInterceptor(ServerInterceptor):
 
     def intercept(self, method, request_or_iterator, context, method_name):
         """
-        Intercept method called for each incoming RPC.
+        Intercept method calls for each incoming RPC.
         """
         response = method(request_or_iterator, context)
         if context.details():
             self.logger.error(
-                '%s - - [%s] "%s %s" %s -',
-                context.peer(),
-                datetime.now().strftime("%B %d, %Y %H:%M:%S"),
+                "%s %s - %s -",
                 method_name,
                 self.server_protocol,
                 str(context.code()).split(".")[1],
             )
         else:
-            self.logger.info(
-                '%s - - [%s] "%s %s" %s -',
-                context.peer(),
-                datetime.now().strftime("%B %d, %Y %H:%M:%S"),
-                method_name,
-                self.server_protocol,
-                "OK",
-            )
+            self.logger.info("%s %s - %s -", method_name, self.server_protocol, "OK")
         return response
 
 
@@ -58,20 +51,14 @@ def serve():
     """
     Starts the gRPC server and listens for requests.
     """
-    mode = Configurations.MODE
-    server_certificate = get_configs("SSL_CERTIFICATE")
-    private_key = get_configs("SSL_KEY")
+    mode = get_configs("MODE", default_value="development")
     hostname = get_configs("GRPC_HOST")
-    secure_port = get_configs("GRPC_SSL_PORT")
-    port = get_configs("GRPC_PORT")
 
     num_cpu_cores = os.cpu_count()
     max_workers = 10
 
     logger.info("Starting server in %s mode...", mode)
     logger.info("Hostname: %s", hostname)
-    logger.info("Insecure port: %s", port)
-    logger.info("Secure port: %s", secure_port)
     logger.info("Logical CPU cores available: %s", num_cpu_cores)
     logger.info("gRPC server max workers: %s", max_workers)
 
@@ -82,6 +69,11 @@ def serve():
     vault_pb2_grpc.add_EntityServicer_to_server(EntityService(), server)
 
     if mode == "production":
+        server_certificate = get_configs("SSL_CERTIFICATE", strict=True)
+        private_key = get_configs("SSL_KEY", strict=True)
+        secure_port = get_configs("GRPC_SSL_PORT", default_value=8443)
+
+        logger.info("Secure port: %s", secure_port)
         try:
             with open(server_certificate, "rb") as f:
                 server_certificate_data = f.read()
@@ -116,6 +108,9 @@ def serve():
             )
             raise
     else:
+        port = get_configs("GRPC_PORT", default_value=8000)
+        logger.info("Insecure port: %s", port)
+
         server.add_insecure_port(f"{hostname}:{port}")
         logger.warning(
             "The server is running in insecure mode at %s:%s", hostname, port
