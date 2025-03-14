@@ -969,9 +969,11 @@ class EntityInternalService(vault_pb2_grpc.EntityInternalServicer):
                 new_server_pub_key = load_keypair_object(
                     server_publish_keypair_plaintext
                 ).get_public_key()
-                current_server_pub_key = load_keypair_object(
-                    entity_obj.publish_keypair
-                ).get_public_key()
+                current_server_pub_key = (
+                    load_keypair_object(entity_obj.publish_keypair).get_public_key()
+                    if entity_obj.publish_keypair
+                    else None
+                )
 
                 if (new_server_pub_key != current_server_pub_key) or (
                     request.client_publish_pub_key != entity_obj.client_publish_pub_key
