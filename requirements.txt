@@ -18,4 +18,4 @@ requests==2.32.3
 smswithoutborders_libsig @ git+https://github.com/smswithoutborders/lib_signal_double_ratchet_python.git@v0.1.2
 SwobThirdPartyPlatforms @ git+https://github.com/smswithoutborders/SMSWithoutBorders-Customized-Third-Party-Platforms.git@main#egg=SwobThirdPartyPlatforms
 tqdm==4.67.1
-twilio==9.4.6
+twilio==9.5.1
