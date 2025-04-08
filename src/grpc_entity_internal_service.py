@@ -264,12 +264,9 @@ class EntityInternalService(vault_pb2_grpc.EntityInternalServicer):
                 token.save(only=["account_tokens"])
                 logger.info("Token overwritten successfully.")
 
-                return self.handle_create_grpc_error_response(
-                    context,
-                    response,
-                    "A token is already associated with the account identifier "
-                    f"'{request.account_identifier}'.",
-                    grpc.StatusCode.ALREADY_EXISTS,
+                return response(
+                    message="Token stored successfully.",
+                    success=True,
                 )
 
             return None
