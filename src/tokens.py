@@ -18,7 +18,7 @@ def create_entity_token(
     account_identifier_hash,
     account_identifier,
     account_tokens,
-    **kwargs
+    **kwargs,
 ):
     """
     Create a new token associated with an entity.
@@ -121,3 +121,36 @@ def find_token(**search_criteria):
         except DoesNotExist:
             logger.debug("Token is not found...")
             return None
+
+
+def update_entity_tokens(entity, update_fields, **search_criteria):
+    """
+    Update tokens associated with the given entity based on search criteria.
+
+    Args:
+        entity (Entity): The entity associated with the tokens.
+        update_fields (dict): A dictionary of fields to update with their new values.
+        **search_criteria: Additional keyword arguments representing the fields
+            and their values to search for.
+
+    Returns:
+        int: The number of rows updated.
+    """
+    logger.debug("Updating tokens for the specified entity...")
+    with database.atomic():
+        query = Token.update(**update_fields).where(Token.eid == entity)
+
+        if search_criteria:
+            conditions = [
+                (getattr(Token, key) == value)
+                for key, value in search_criteria.items()
+                if value is not None
+            ]
+            if conditions:
+                query = query.where(*conditions)
+                logger.debug("Applying search criteria: %s", search_criteria)
+
+        rows_updated = query.execute()
+        logger.debug("Number of tokens updated: %s", rows_updated)
+
+    return rows_updated
