@@ -13,10 +13,6 @@
     - [Authenticate an Entity](#authenticate-an-entity)
       - [Initiate Authentication](#initiate-authentication)
       - [Complete Authentication](#complete-authentication)
-    - [Create Bridge Entity](#create-bridge-entity)
-      - [Initiate Bridge Creation](#initiate-bridge-creation)
-      - [Complete  Bridge Creation](#complete-bride-creation)
-    - [Authenticate Bridge Entity](#authenticate-bridge-entity)
     - [List an Entity's Stored Tokens](#list-an-entitys-stored-tokens)
     - [Delete An Entity](#delete-an-entity)
     - [Reset an Entity's Password](#reset-an-entitys-password)
@@ -30,6 +26,10 @@
     - [Encrypt Payload](#encrypt-payload)
     - [Update An Entity Token](#update-an-entitys-token)
     - [Delete An Entity's Token](#delete-an-entitys-token)
+    - [Create Bridge Entity](#create-bridge-entity)
+      - [Initiate Bridge Creation](#initiate-bridge-creation)
+      - [Complete Bridge Creation](#complete-bride-creation)
+    - [Authenticate Bridge Entity](#authenticate-bridge-entity)
 
 ## Download Protocol Buffer File
 
@@ -556,13 +556,12 @@ intend to use. This step ensures security and authenticity in the entity creatio
 > The table lists only the required fields for this step. Other fields will be
 > ignored.
 
-| Field                  | Type   | Description                                                                                                                                |
-|------------------------|--------|--------------------------------------------------------------------------------------------------------------------------------------------|
-| phone_number          | string | The phone number associated with the bridge entity. It should be in [E164 format](https://en.wikipedia.org/wiki/E.164), e.g., +237123456789. |
-| country_code          | string | The [ISO 3166-1 alpha-2 code](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2) associated with the phone number. e.g., `CM` for Cameroon. |
-| client_publish_pub_key | string | An `X25519` public key for publishing, `base64 encoded`.                                                                                   |
+| Field                  | Type   | Description                                                                                                                                  |
+| ---------------------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| phone_number           | string | The phone number associated with the bridge entity. It should be in [E164 format](https://en.wikipedia.org/wiki/E.164), e.g., +237123456789. |
+| country_code           | string | The [ISO 3166-1 alpha-2 code](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2) associated with the phone number. e.g., `CM` for Cameroon.   |
+| client_publish_pub_key | string | An `X25519` public key for publishing, `base64 encoded`.                                                                                     |
 
-                               
 ---
 
 ##### Response
@@ -574,10 +573,10 @@ intend to use. This step ensures security and authenticity in the entity creatio
 > The table lists only the fields that are populated for this step. Other fields
 > may be empty, omitted, or false.
 
-| Field                   | Type  | Description                                                       |
-|-------------------------|-------|-------------------------------------------------------------------|
-| message                | string | A response message from the server.                              |
-| success                | bool   | Indicates whether the operation was successful. `true` or `false`. |
+| Field   | Type   | Description                                                        |
+| ------- | ------ | ------------------------------------------------------------------ |
+| message | string | A response message from the server.                                |
+| success | bool   | Indicates whether the operation was successful. `true` or `false`. |
 
 ---
 
@@ -651,11 +650,11 @@ localhost:6000 vault.v1.Entity/CreateBridgeEntity <payload.json
 > The table lists only the required fields for this step. Other fields will be
 > ignored.
 
-| Field                    | Type   | Description                                                                                                                                |
-|--------------------------|--------|--------------------------------------------------------------------------------------------------------------------------------------------|
-| phone_number            | string | The phone number associated with the bridge entity. It should be in [E164 format](https://en.wikipedia.org/wiki/E.164), e.g., +237123456789. |
-| country_code            | string | The [ISO 3166-1 alpha-2 code](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2) associated with the phone number. e.g., `CM` for Cameroon. |
-| ownership_proof_response | string | The proof response from the previous step.                                                                                                |
+| Field                    | Type   | Description                                                                                                                                  |
+| ------------------------ | ------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| phone_number             | string | The phone number associated with the bridge entity. It should be in [E164 format](https://en.wikipedia.org/wiki/E.164), e.g., +237123456789. |
+| country_code             | string | The [ISO 3166-1 alpha-2 code](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2) associated with the phone number. e.g., `CM` for Cameroon.   |
+| ownership_proof_response | string | The proof response from the previous step.                                                                                                   |
 
 ---
 
@@ -668,10 +667,10 @@ localhost:6000 vault.v1.Entity/CreateBridgeEntity <payload.json
 > The table lists only the fields that are populated for this step. Other fields
 > may be empty, omitted, or false.
 
-| Field                   | Type  | Description                                                       |
-|-------------------------|-------|-------------------------------------------------------------------|
-| message                | string | A response message from the server.                              |
-| success                | bool   | Indicates whether the operation was successful. `true` or `false`. |
+| Field   | Type   | Description                                                        |
+| ------- | ------ | ------------------------------------------------------------------ |
+| message | string | A response message from the server.                                |
+| success | bool   | Indicates whether the operation was successful. `true` or `false`. |
 
 ---
 
@@ -737,9 +736,9 @@ An entity represents a user or client in the vault.
 
 > `request` **AuthenticateBridgeEntityRequest**
 
-| Field         | Type   | Description                                        |
-| ------------- | ------ | -------------------------------------------------- |
-| phone_number  | string | The phone number associated with the bridge entity. |
+| Field        | Type   | Description                                         |
+| ------------ | ------ | --------------------------------------------------- |
+| phone_number | string | The phone number associated with the bridge entity. |
 
 ---
 
@@ -747,9 +746,9 @@ An entity represents a user or client in the vault.
 
 > `response` **AuthenticateBridgeEntityResponse**
 
-| Field   | Type   | Description                                  |
-| ------- | ------ | -------------------------------------------- |
-| message | string | A response message from the server.          |
+| Field   | Type   | Description                                      |
+| ------- | ------ | ------------------------------------------------ |
+| message | string | A response message from the server.              |
 | success | bool   | Indicates whether authentication was successful. |
 
 ---
@@ -790,7 +789,6 @@ localhost:6000 vault.v1.Entity/AuthenticateBridgeEntity <payload.json
 }
 ```
 
-
 ### List an Entity's Stored Tokens
 
 This method retrieves the stored tokens for a given entity.
@@ -810,6 +808,12 @@ This method retrieves the stored tokens for a given entity.
 | ---------------- | ------ | -------------------------------------------------------------------------------- |
 | long_lived_token | string | The long-lived token for the authenticated session, used to identify the entity. |
 
+Optional fields:
+
+| Field             | Type | Description                                                                     |
+| ----------------- | ---- | ------------------------------------------------------------------------------- |
+| migrate_to_device | bool | Indicates if the token should be removed from the cloud and sent to the device. |
+
 ---
 
 ##### Response
@@ -821,10 +825,21 @@ This method retrieves the stored tokens for a given entity.
 > The table lists only the fields that are populated for this step. Other fields
 > may be empty, omitted, or false.
 
-| Field         | Type   | Description                                                            |
-| ------------- | ------ | ---------------------------------------------------------------------- |
-| stored_tokens | array  | A list of stored tokens. Each token object may contain various fields. |
-| message       | string | A response message from the server.                                    |
+| Field         | Type   | Description                                                                                                           |
+| ------------- | ------ | --------------------------------------------------------------------------------------------------------------------- |
+| stored_tokens | array  | A list of stored tokens. Each token object may contain various fields. See [Token Object](#token-object) for details. |
+| message       | string | A response message from the server.                                                                                   |
+
+##### Token Object
+
+> `message` **Token**
+
+| Field               | Type                | Description                                                                                             |
+| ------------------- | ------------------- | ------------------------------------------------------------------------------------------------------- |
+| platform            | string              | The platform associated with the token.                                                                 |
+| account_identifier  | string              | The unique identifier of the account associated with the token.                                         |
+| account_tokens      | map<string, string> | Contains the access, refresh, and ID tokens with keys: `access_token`, `refresh_token`, and `id_token`. |
+| is_stored_on_device | bool                | Indicates if the token is already stored on the device.                                                 |
 
 ---
 
