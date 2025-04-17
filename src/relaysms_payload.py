@@ -73,7 +73,7 @@ def encrypt_payload(server_state, client_publish_pub_key, content):
     """
     try:
         if not server_state:
-            return None, None, None, "Server state is not initialized."
+            raise ValueError("Server state is not initialized.")
 
         logger.debug("Deserializing state...")
         state = States.deserialize(server_state)
