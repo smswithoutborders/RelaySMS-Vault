@@ -474,7 +474,7 @@ class EntityInternalService(vault_pb2_grpc.EntityInternalServicer):
             )
 
             if encrypt_error:
-                return self.handle_create_grpc_error_response(
+                return None, self.handle_create_grpc_error_response(
                     context,
                     response,
                     encrypt_error,
