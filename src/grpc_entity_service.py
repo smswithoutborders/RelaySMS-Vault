@@ -629,6 +629,13 @@ class EntityService(vault_pb2_grpc.EntityServicer):
 
                 account_tokens = json.loads(token["account_tokens"])
 
+                if (
+                    token["platform"] in oauth2_platforms
+                    and not account_tokens.get("access_token")
+                    and not account_tokens.get("refresh_token")
+                ):
+                    token["is_stored_on_device"] = True
+
                 if request.migrate_to_device and token["platform"] in oauth2_platforms:
                     original_account_tokens = account_tokens.copy()
                     token["account_tokens"] = {
@@ -653,13 +660,6 @@ class EntityService(vault_pb2_grpc.EntityServicer):
                         )
                 else:
                     token["account_tokens"] = {}
-
-                if (
-                    token["platform"] in oauth2_platforms
-                    and not account_tokens.get("access_token")
-                    and not account_tokens.get("refresh_token")
-                ):
-                    token["is_stored_on_device"] = True
 
             logger.info("Successfully retrieved tokens.")
             return response(
