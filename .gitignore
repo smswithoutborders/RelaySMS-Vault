@@ -153,3 +153,5 @@ platforms.json
 
 # Static public keys info
 static_x25519_pub_keys.json
+*.key
+keystore/
