@@ -7,6 +7,7 @@ Public License was not distributed with this file, see <https://www.gnu.org/lice
 import base64
 import re
 import traceback
+import json
 
 import grpc
 import phonenumbers
@@ -16,7 +17,7 @@ import vault_pb2_grpc
 
 from src import signups
 from src.entity import create_entity, find_entity
-from src.tokens import fetch_entity_tokens
+from src.tokens import fetch_entity_tokens, update_entity_tokens
 from src.crypto import generate_hmac, verify_hmac
 from src.otp_service import send_otp, verify_otp
 from src.utils import (
@@ -614,13 +615,51 @@ class EntityService(vault_pb2_grpc.EntityServicer):
             tokens = fetch_entity_tokens(
                 entity=entity_obj,
                 fetch_all=True,
-                fields=["account_identifier", "platform"],
+                fields=["account_identifier", "platform", "account_tokens"],
                 return_json=True,
             )
+
+            oauth2_platforms = ("gmail", "twitter")
+            fields_to_decrypt = ["account_identifier", "account_tokens"]
+
             for token in tokens:
-                for field in ["account_identifier"]:
+                for field in fields_to_decrypt:
                     if field in token:
                         token[field] = decrypt_and_decode(token[field])
+
+                account_tokens = json.loads(token["account_tokens"])
+
+                if (
+                    token["platform"] in oauth2_platforms
+                    and not account_tokens.get("access_token")
+                    and not account_tokens.get("refresh_token")
+                ):
+                    token["is_stored_on_device"] = True
+
+                if request.migrate_to_device and token["platform"] in oauth2_platforms:
+                    original_account_tokens = account_tokens.copy()
+                    token["account_tokens"] = {
+                        key: account_tokens.pop(key, "")
+                        for key in ["access_token", "refresh_token", "id_token"]
+                    }
+                    if account_tokens != original_account_tokens:
+                        account_identifier_hash = generate_hmac(
+                            HASHING_KEY,
+                            token.get("account_identifier"),
+                        )
+
+                        update_entity_tokens(
+                            entity=entity_obj,
+                            update_fields={
+                                "account_tokens": encrypt_and_encode(
+                                    json.dumps(account_tokens)
+                                )
+                            },
+                            platform=token.get("platform"),
+                            account_identifier_hash=account_identifier_hash,
+                        )
+                else:
+                    token["account_tokens"] = {}
 
             logger.info("Successfully retrieved tokens.")
             return response(
