@@ -10,15 +10,26 @@ define log_message
 endef
 
 start-rest-api:
-	$(call log_message,[INFO] Starting REST API with TLS ...)
-	@gunicorn -w 4 -b 0.0.0.0:$(SSL_PORT) \
-		--log-level=info \
-		--access-logfile=- \
-		--certfile=$(SSL_CERTIFICATE) \
-		--keyfile=$(SSL_KEY) \
-		--threads 15 \
-		--timeout 30 \
-		app:app
+	$(call log_message,[INFO] Starting REST API ...)
+	@if [ "$$MODE" = "production" ]; then \
+		echo "[INFO] Running in production mode with SSL"; \
+		gunicorn -w 4 -b 0.0.0.0:$$SSL_PORT \
+			--log-level=info \
+			--access-logfile=- \
+			--certfile=$$SSL_CERTIFICATE \
+			--keyfile=$$SSL_KEY \
+			--threads 15 \
+			--timeout 30 \
+			app:app; \
+	else \
+		echo "[INFO] Running in development mode without SSL"; \
+		gunicorn -w 1 -b 0.0.0.0:$$PORT \
+			--log-level=info \
+			--access-logfile=- \
+			--threads 3 \
+			--timeout 30 \
+			app:app; \
+	fi
 	$(call log_message,[INFO] REST API started successfully.)
 
 grpc-compile:
@@ -59,3 +70,15 @@ generate-static-keys:
 
 build-setup: grpc-compile download-platforms
 runtime-setup: create-dummy-user generate-static-keys
+
+clean:
+	$(call log_message,[INFO] Cleaning build, environment, and generated files ...)
+	@rm -f vault_pb2*
+	@rm -f vault.db
+	@rm -f hashing.key
+	@rm -f encryption.key
+	@rm -f platforms.json
+	@rm -f .env
+	@rm -rf venv/
+	@rm -rf keystore/
+	$(call log_message,[INFO] Clean complete.)
