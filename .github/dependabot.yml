@@ -28,12 +28,3 @@ updates:
         dependency-type: "development"
         patterns:
           - "*"
-  - package-ecosystem: "pip"
-    directory: "/"
-    schedule:
-      interval: "daily"
-    open-pull-requests-limit: 10
-    update-type: "security"
-    labels:
-      - "security"
-      - "dependencies"
