@@ -8,7 +8,6 @@ updates:
     open-pull-requests-limit: 99
     labels:
       - "dependencies"
-      - "docker"
   - package-ecosystem: "pip"
     directory: "/"
     target-branch: "staging"
@@ -20,7 +19,6 @@ updates:
       - dependency-type: "indirect"
     labels:
       - "dependencies"
-      - "python"
     groups:
       production-dependencies:
         dependency-type: "production"
