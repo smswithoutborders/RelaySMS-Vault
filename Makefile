@@ -3,7 +3,7 @@
 # Public License was not distributed with this file, see <https://www.gnu.org/licenses/>.
 
 PYTHON := python3
-SUPPORTED_PLATFORMS_URL="https://raw.githubusercontent.com/smswithoutborders/SMSWithoutBorders-Publisher/main/resources/platforms.json"
+SUPPORTED_PLATFORMS_URL="https://publisher.staging.smswithoutborders.com/v1/platforms"
 
 define log_message
 	@echo "[$(shell date +'%Y-%m-%d %H:%M:%S')] $(1)"
