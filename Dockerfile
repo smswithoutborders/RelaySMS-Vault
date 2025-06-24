@@ -2,8 +2,9 @@ FROM python:3.13.4-slim AS base
 
 WORKDIR /vault
 
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
+RUN --mount=type=cache,target=/var/cache/apt \
+    --mount=type=cache,target=/var/lib/apt \
+    apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     apache2 \
     apache2-dev \
@@ -12,6 +13,7 @@ RUN apt-get update && \
     libsqlcipher-dev \
     libsqlite3-dev \
     git \
+    vim \
     curl \
     pkg-config && \
     apt-get clean && \
