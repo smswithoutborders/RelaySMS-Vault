@@ -2,8 +2,8 @@ FROM python:3.13.4-slim AS base
 
 WORKDIR /vault
 
-RUN --mount=type=cache,target=/var/cache/apt \
-    --mount=type=cache,target=/var/lib/apt \
+RUN --mount=type=cache,sharing=locked,target=/var/cache/apt \
+    --mount=type=cache,sharing=locked,target=/var/lib/apt \
     apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     apache2 \
