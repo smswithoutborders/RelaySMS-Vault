@@ -426,6 +426,24 @@ def get_supported_platforms():
     return tuple(platform["name"] for platform in platform_details)
 
 
+def get_platforms_by_protocol_type(protocol_type):
+    """
+    Get all platform names with the given protocol_type.
+
+    Args:
+        protocol_type (str): The protocol type to filter platforms by.
+
+    Returns:
+        tuple: A tuple of platform names matching the protocol_type.
+    """
+    platform_details = load_platforms_from_file(SUPPORTED_PLATFORM_FILE_PATH)
+    return tuple(
+        platform["name"]
+        for platform in platform_details
+        if platform.get("protocol_type") == protocol_type
+    )
+
+
 def validate_metrics_args(
     start_date: str = None,
     end_date: str = None,
