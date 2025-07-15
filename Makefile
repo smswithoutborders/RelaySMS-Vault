@@ -3,7 +3,8 @@
 # Public License was not distributed with this file, see <https://www.gnu.org/licenses/>.
 
 PYTHON := python3
-SUPPORTED_PLATFORMS_URL="https://raw.githubusercontent.com/smswithoutborders/SMSWithoutBorders-Publisher/main/resources/platforms.json"
+STAGING_PLATFORMS_URL="https://publisher.staging.smswithoutborders.com/v1/platforms"
+PRODUCTION_PLATFORMS_URL="https://publisher.smswithoutborders.com/v1/platforms"
 
 define log_message
 	@echo "[$(shell date +'%Y-%m-%d %H:%M:%S')] $(1)"
@@ -54,7 +55,14 @@ grpc-internal-server-start:
 
 download-platforms:
 	$(call log_message,[INFO] Downloading platforms JSON file ...)
-	@curl -sSL -o platforms.json "$(SUPPORTED_PLATFORMS_URL)"
+	@BRANCH=$$(git branch --show-current 2>/dev/null || echo "main"); \
+	if [ "$$BRANCH" = "main" ]; then \
+		echo "[INFO] Using production platforms URL for branch: $$BRANCH"; \
+		curl -sSL -o platforms.json "$(PRODUCTION_PLATFORMS_URL)"; \
+	else \
+		echo "[INFO] Using staging platforms URL for branch: $$BRANCH"; \
+		curl -sSL -o platforms.json "$(STAGING_PLATFORMS_URL)"; \
+	fi
 	$(call log_message,[INFO] Platforms JSON file downloaded successfully.)
 
 create-dummy-user:

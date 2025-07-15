@@ -30,6 +30,7 @@ from src.utils import (
     decrypt_and_decode,
     load_keypair_object,
     clear_keystore,
+    get_platforms_by_protocol_type,
 )
 from src.long_lived_token import generate_llt, verify_llt
 from src.device_id import compute_device_id
@@ -619,7 +620,7 @@ class EntityService(vault_pb2_grpc.EntityServicer):
                 return_json=True,
             )
 
-            oauth2_platforms = ("gmail", "twitter")
+            oauth2_platforms = get_platforms_by_protocol_type("oauth2")
             fields_to_decrypt = ["account_identifier", "account_tokens"]
 
             for token in tokens:
