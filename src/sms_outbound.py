@@ -7,7 +7,7 @@ Public License was not distributed with this file, see <https://www.gnu.org/lice
 import requests
 import phonenumbers
 from phonenumbers import geocoder
-from utils import get_configs
+from src.utils import get_configs
 from base_logger import get_logger
 
 
