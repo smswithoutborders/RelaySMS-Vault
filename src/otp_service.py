@@ -7,6 +7,11 @@ from twilio.rest import Client
 from twilio.base.exceptions import TwilioRestException
 from src.db_models import OTPRateLimit, OTP
 from src.utils import get_configs
+from src.sms_outbound import (
+    get_phonenumber_region_code,
+    send_with_queuedroid,
+    QUEUEDROID_SUPPORTED_VERIFICATION_REGION_CODES,
+)
 from base_logger import get_logger
 
 logger = get_logger(__name__)
@@ -84,11 +89,23 @@ def send_otp(phone_number, message_body=None):
         return False, "Too many OTP requests. Please wait and try again later.", None
 
     expires = None
+    region_code = get_phonenumber_region_code(phone_number)
 
     if MOCK_OTP:
         success, message = mock_send_otp()
     elif phone_number in DUMMY_PHONENUMBERS:
         success, message = mock_send_otp()
+    elif region_code in QUEUEDROID_SUPPORTED_VERIFICATION_REGION_CODES:
+        _, otp_result = create_inapp_otp(phone_number=phone_number)
+        otp_code, _ = otp_result
+
+        message_body = "Your RelaySMS Verification Code is: " + otp_code
+        success = send_with_queuedroid(phone_number, message_body)
+        message = (
+            "OTP sent successfully. Please check your phone for the code."
+            if success
+            else "Failed to send OTP. Please try again later."
+        )
     else:
         success, message = twilio_send_otp(phone_number, message_body)
 
@@ -121,10 +138,14 @@ def verify_otp(phone_number, otp, use_twilio=True):
             "OTP not initiated. Please request a new OTP before attempting to verify.",
         )
 
+    region_code = get_phonenumber_region_code(phone_number)
+
     if MOCK_OTP:
         success, message = mock_verify_otp(otp)
     elif phone_number in DUMMY_PHONENUMBERS:
         success, message = mock_verify_otp(otp)
+    elif region_code in QUEUEDROID_SUPPORTED_VERIFICATION_REGION_CODES:
+        success, message = verify_inapp_otp(phone_number, otp)
     elif use_twilio:
         success, message = twilio_verify_otp(phone_number, otp)
     else:
