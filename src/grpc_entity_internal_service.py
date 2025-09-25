@@ -7,6 +7,8 @@ Public License was not distributed with this file, see <https://www.gnu.org/lice
 import base64
 import re
 import traceback
+import threading
+import weakref
 
 import grpc
 import phonenumbers
@@ -52,6 +54,25 @@ DEFAULT_LANGUAGE = "en"
 
 class EntityInternalService(vault_pb2_grpc.EntityInternalServicer):
     """Entity Internal Service Descriptor"""
+
+    _entity_locks: "weakref.WeakValueDictionary[str, threading.Lock]" = (
+        weakref.WeakValueDictionary()
+    )
+    _locks_lock: threading.Lock = threading.Lock()
+
+    @classmethod
+    def _get_entity_lock(cls, entity_id: str) -> threading.Lock:
+        """
+        Get or create a lock for a specific entity.
+        Locks are automatically removed when no longer used.
+        """
+        with cls._locks_lock:
+            lock = cls._entity_locks.get(entity_id)
+            if lock is None:
+                lock = threading.Lock()
+                cls._entity_locks[entity_id] = lock
+                logger.debug("Created new lock for entity %s", entity_id)
+            return lock
 
     def handle_create_grpc_error_response(
         self, context, response, error, status_code, **kwargs
@@ -433,13 +454,22 @@ class EntityInternalService(vault_pb2_grpc.EntityInternalServicer):
                         grpc.StatusCode.UNAUTHENTICATED,
                     )
 
-            decoded_response, decoding_error = decode_message()
-            if decoding_error:
-                return decoding_error
+            entity_id = entity_obj.eid
+            entity_lock = self._get_entity_lock(entity_id)
 
-            header, content_ciphertext = decoded_response
+            with entity_lock:
+                logger.debug("Acquired lock for entity %s", entity_id)
+                entity_obj = find_entity(eid=entity_id)
 
-            return decrypt_message(entity_obj, header, content_ciphertext)
+                decoded_response, decoding_error = decode_message()
+                if decoding_error:
+                    return decoding_error
+
+                header, content_ciphertext = decoded_response
+
+                result = decrypt_message(entity_obj, header, content_ciphertext)
+                logger.debug("Released lock for entity %s", entity_id)
+                return result
 
         except Exception as e:
             return self.handle_create_grpc_error_response(
