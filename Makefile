@@ -5,6 +5,7 @@
 PYTHON := python3
 STAGING_PLATFORMS_URL="https://publisher.staging.smswithoutborders.com/v1/platforms"
 PRODUCTION_PLATFORMS_URL="https://publisher.smswithoutborders.com/v1/platforms"
+FALLBACK_PLATFORMS_URL="https://raw.githubusercontent.com/smswithoutborders/RelaySMS-Publisher/refs/heads/staging/resources/platforms.json"
 
 define log_message
 	@echo "[$(shell date +'%Y-%m-%d %H:%M:%S')] $(1)"
@@ -58,10 +59,12 @@ download-platforms:
 	@BRANCH=$$(git branch --show-current 2>/dev/null || echo "main"); \
 	if [ "$$BRANCH" = "main" ]; then \
 		echo "[INFO] Using production platforms URL for branch: $$BRANCH"; \
-		curl -sSL -o platforms.json "$(PRODUCTION_PLATFORMS_URL)"; \
+		curl -sSL -o platforms.json "$(PRODUCTION_PLATFORMS_URL)" || \
+		curl -sSL -o platforms.json "$(FALLBACK_PLATFORMS_URL)"; \
 	else \
 		echo "[INFO] Using staging platforms URL for branch: $$BRANCH"; \
-		curl -sSL -o platforms.json "$(STAGING_PLATFORMS_URL)"; \
+		curl -sSL -o platforms.json "$(STAGING_PLATFORMS_URL)" || \
+		curl -sSL -o platforms.json "$(FALLBACK_PLATFORMS_URL)"; \
 	fi
 	$(call log_message,[INFO] Platforms JSON file downloaded successfully.)
 
