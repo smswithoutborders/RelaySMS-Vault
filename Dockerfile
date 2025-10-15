@@ -21,7 +21,7 @@ RUN --mount=type=cache,sharing=locked,target=/var/cache/apt \
 
 COPY requirements.txt .
 RUN --mount=type=cache,sharing=locked,target=/root/.cache/pip \
-    pip install --disable-pip-version-check --quiet --no-cache-dir -r requirements.txt
+    pip install --disable-pip-version-check -r requirements.txt
 
 COPY . .
 
