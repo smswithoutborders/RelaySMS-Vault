@@ -43,10 +43,13 @@ def decrypt_payload(
         else:
             logger.debug("Deserializing state...")
             state = States.deserialize(server_state)
+            logger.debug("Current state: %s", state)
 
         logger.debug("Deserializing header...")
         header = HEADERS.deserialize(ratchet_header)
+        logger.debug("Current header: %s", header)
         logger.debug("Decrypting content...")
+        logger.debug("Ciphertext: %s", encrypted_content)
         plaintext = Ratchets.decrypt(
             state=state, header=header, ciphertext=encrypted_content, AD=publish_pub_key
         )
