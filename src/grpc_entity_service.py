@@ -282,10 +282,26 @@ class EntityService(vault_pb2_grpc.EntityServicer):
                     "Entity's client device ID public key is missing. Should re-authenticate."
                 )
 
+            if not entity_obj.device_id_keypair:
+                return None, create_error_response(
+                    "Entity's device ID keypair is missing. Should re-authenticate."
+                )
+
             entity_device_id_keypair = load_keypair_object(entity_obj.device_id_keypair)
-            entity_device_id_shared_key = entity_device_id_keypair.agree(
-                base64.b64decode(entity_obj.client_device_id_pub_key),
-            )
+
+            if not entity_device_id_keypair:
+                return None, create_error_response(
+                    "Failed to load entity's device ID keypair. Should re-authenticate."
+                )
+
+            try:
+                entity_device_id_shared_key = entity_device_id_keypair.agree(
+                    base64.b64decode(entity_obj.client_device_id_pub_key),
+                )
+            except Exception as e:
+                return None, create_error_response(
+                    f"Failed to compute shared key: {str(e)}. Should re-authenticate."
+                )
 
             llt_payload, llt_error = verify_llt(llt, entity_device_id_shared_key)
 
