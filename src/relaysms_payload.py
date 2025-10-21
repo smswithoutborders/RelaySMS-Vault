@@ -34,6 +34,7 @@ def decrypt_payload(
     """
     publish_shared_key = kwargs.get("publish_shared_key")
     publish_pub_key = kwargs.get("publish_pub_key")
+    logger.debug("Ciphertext: %s", encrypted_content)
 
     try:
         if not server_state:
@@ -42,14 +43,17 @@ def decrypt_payload(
             Ratchets.bob_init(state, publish_shared_key, publish_keypair)
         else:
             logger.debug("Deserializing state...")
+            logger.debug("Current state: %s", server_state)
             state = States.deserialize(server_state)
 
         logger.debug("Deserializing header...")
+        logger.debug("Current header: %s", ratchet_header)
         header = HEADERS.deserialize(ratchet_header)
         logger.debug("Decrypting content...")
         plaintext = Ratchets.decrypt(
             state=state, header=header, ciphertext=encrypted_content, AD=publish_pub_key
         )
+        logger.debug("Plaintext: %s", plaintext)
         return plaintext, state, None
     except Exception as e:
         return None, None, e
@@ -71,16 +75,20 @@ def encrypt_payload(server_state, client_publish_pub_key, content):
             - state (bytes): Updated server state.
             - error (Exception or None)
     """
+    logger.debug("Plaintext: %s", content)
     try:
         if not server_state:
             raise ValueError("Server state is not initialized.")
 
         logger.debug("Deserializing state...")
+        logger.debug("Current state: %s", server_state)
         state = States.deserialize(server_state)
         logger.debug("Encrypting content...")
         header, content_ciphertext = Ratchets.encrypt(
             state=state, data=content.encode("utf-8"), AD=client_publish_pub_key
         )
+        logger.debug("Current header: %s", header)
+        logger.debug("Ciphertext: %s", content_ciphertext)
         return header.serialize(), content_ciphertext, state, None
     except Exception as e:
         return None, None, None, e

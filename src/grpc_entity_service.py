@@ -277,6 +277,11 @@ class EntityService(vault_pb2_grpc.EntityServicer):
             return entity_obj, None
 
         def validate_long_lived_token(llt, entity_obj):
+            if not entity_obj.client_device_id_pub_key:
+                return None, create_error_response(
+                    "Entity's client device ID public key is missing. Should re-authenticate."
+                )
+
             entity_device_id_keypair = load_keypair_object(entity_obj.device_id_keypair)
             entity_device_id_shared_key = entity_device_id_keypair.agree(
                 base64.b64decode(entity_obj.client_device_id_pub_key),
