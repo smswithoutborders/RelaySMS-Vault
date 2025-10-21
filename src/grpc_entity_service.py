@@ -294,9 +294,14 @@ class EntityService(vault_pb2_grpc.EntityServicer):
                     "Failed to load entity's device ID keypair. Should re-authenticate."
                 )
 
-            entity_device_id_shared_key = entity_device_id_keypair.agree(
-                base64.b64decode(entity_obj.client_device_id_pub_key),
-            )
+            try:
+                entity_device_id_shared_key = entity_device_id_keypair.agree(
+                    base64.b64decode(entity_obj.client_device_id_pub_key),
+                )
+            except Exception as e:
+                return None, create_error_response(
+                    f"Failed to compute shared key: {str(e)}. Should re-authenticate."
+                )
 
             llt_payload, llt_error = verify_llt(llt, entity_device_id_shared_key)
 
