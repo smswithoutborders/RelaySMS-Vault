@@ -94,6 +94,7 @@ sudo apt install python3-dev libmysqlclient-dev apache2 apache2-dev make libapac
    ```
 
 6. **Generate static x25519 keys:**
+
    ```bash
    make generate-static-keys
    ```
@@ -145,13 +146,17 @@ docker run --rm --env-file .env -p 19000:19000 -p 8000:8000 -p 8443:8443 -v $(pw
 > [!TIP]
 >
 > - To run in detached mode:
+>
 >   ```bash
 >   docker run -d --name relaysms-vault-dev --env-file .env -p 19000:19000 -p 8000:8000 -p 8443:8443 -v $(pwd)/keystore:/vault/keystore -v $(pwd)/encryption.key:/vault/encryption.key -v $(pwd)/hashing.key:/vault/hashing.key relaysms-vault:dev
 >   ```
+>
 >   Then view logs with:
+>
 >   ```bash
 >   docker logs -f relaysms-vault-dev
 >   ```
+>
 > - REST API: `http://localhost:19000` or `https://localhost:19001`
 > - gRPC server: `localhost:8000` (plaintext) or `localhost:8001` (SSL)
 > - gRPC internal server: `localhost:8443` (plaintext) or `localhost:8444` (SSL)
@@ -211,6 +216,7 @@ docker run --rm \
 > [!TIP]
 >
 > - To run in detached mode:
+>
 >   ```bash
 >   docker run -d \
 >     --name relaysms-vault-prod \
@@ -223,10 +229,13 @@ docker run --rm \
 >     -v $(pwd)/hashing.key:/vault/hashing.key \
 >     relaysms-vault:prod
 >   ```
+>
 >   Then view logs with:
+>
 >   ```bash
 >   docker logs -f relaysms-vault-prod
 >   ```
+>
 > - REST API: `https://localhost:19001`
 > - gRPC server: `localhost:8001` (SSL)
 > - gRPC internal server: `localhost:8444` (SSL)
