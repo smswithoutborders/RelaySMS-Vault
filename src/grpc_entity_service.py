@@ -255,6 +255,7 @@ class EntityService(vault_pb2_grpc.EntityServicer):
                 user_msg=(
                     "The long-lived token is invalid. Please log in again to generate a new token."
                 ),
+                error_type="UNKNOWN",
             )
 
         def extract_token(long_lived_token):
