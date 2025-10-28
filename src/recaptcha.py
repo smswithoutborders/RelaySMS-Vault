@@ -49,7 +49,10 @@ def verify_recaptcha_token(token, remote_ip=None):
         payload["remoteip"] = remote_ip
 
     try:
-        response = requests.post(RECAPTCHA_VERIFY_URL, json=payload, timeout=10)
+        headers = {"Content-Type": "application/x-www-form-urlencoded"}
+        response = requests.post(
+            RECAPTCHA_VERIFY_URL, data=payload, headers=headers, timeout=10
+        )
         response.raise_for_status()
         result = response.json()
 
