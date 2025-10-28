@@ -537,22 +537,25 @@ class EntityService(vault_pb2_grpc.EntityServicer):
                 )
 
             clear_rate_limit(entity_obj.eid)
-            success, pow_response = self.handle_pow_initialization(
-                context, request, response
-            )
-            if not success:
-                return pow_response
 
-            message, expires = pow_response
-            entity_obj.device_id = None
-            entity_obj.server_state = None
-            entity_obj.save()
+            entity_lock = self._get_entity_lock(request.phone_number)
+            with entity_lock:
+                success, pow_response = self.handle_pow_initialization(
+                    context, request, response
+                )
+                if not success:
+                    return pow_response
 
-            return response(
-                requires_ownership_proof=True,
-                message=message,
-                next_attempt_timestamp=expires,
-            )
+                message, expires = pow_response
+                entity_obj.device_id = None
+                entity_obj.server_state = None
+                entity_obj.save()
+
+                return response(
+                    requires_ownership_proof=True,
+                    message=message,
+                    next_attempt_timestamp=expires,
+                )
 
         def complete_authentication(entity_obj):
             success, pow_response = self.handle_pow_verification(
