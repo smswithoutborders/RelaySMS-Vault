@@ -5,6 +5,7 @@ Public License was not distributed with this file, see <https://www.gnu.org/lice
 """
 
 from collections import defaultdict
+from datetime import datetime, time
 from peewee import fn
 from src.db_models import Entity, Signups, Token
 from src.utils import decrypt_and_decode
@@ -83,11 +84,17 @@ def get_signup_users(filters=None, group_by=None, options=None):
             "Pagination ('top', 'page', 'page_size') is not allowed when group_by is None."
         )
 
+    if end_date:
+        end_date_dt = datetime.strptime(end_date, "%Y-%m-%d").date()
+        end_date_dt = datetime.combine(end_date_dt, time.max)
+    else:
+        end_date_dt = None
+
     query = Signups.select()
     if start_date:
         query = query.where(Signups.date_created >= start_date)
-    if end_date:
-        query = query.where(Signups.date_created <= end_date)
+    if end_date_dt:
+        query = query.where(Signups.date_created <= end_date_dt)
 
     if country_code:
         query = query.where(Signups.country_code == country_code)
@@ -245,11 +252,17 @@ def get_retained_users(filters=None, group_by=None, options=None):
             "Pagination ('top', 'page', 'page_size') is not allowed when group_by is None."
         )
 
+    if end_date:
+        end_date_dt = datetime.strptime(end_date, "%Y-%m-%d").date()
+        end_date_dt = datetime.combine(end_date_dt, time.max)
+    else:
+        end_date_dt = None
+
     query = Entity.select()
     if start_date:
         query = query.where(Entity.date_created >= start_date)
-    if end_date:
-        query = query.where(Entity.date_created <= end_date)
+    if end_date_dt:
+        query = query.where(Entity.date_created <= end_date_dt)
 
     total_retained_users_with_tokens = (
         query.select(fn.COUNT(fn.DISTINCT(Entity.eid))).join(Token).scalar()
