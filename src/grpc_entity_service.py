@@ -8,6 +8,8 @@ import base64
 import re
 import traceback
 import json
+import threading
+import weakref
 
 import grpc
 import phonenumbers
@@ -49,6 +51,25 @@ HASHING_KEY = load_key(get_configs("HASHING_SALT", strict=True), 32)
 
 class EntityService(vault_pb2_grpc.EntityServicer):
     """Entity Service Descriptor"""
+
+    _entity_locks: "weakref.WeakValueDictionary[str, threading.Lock]" = (
+        weakref.WeakValueDictionary()
+    )
+    _locks_lock: threading.Lock = threading.Lock()
+
+    @classmethod
+    def _get_entity_lock(cls, identifier: str) -> threading.Lock:
+        """
+        Get or create a lock for a specific entity.
+        Locks are automatically removed when no longer used.
+        """
+        with cls._locks_lock:
+            lock = cls._entity_locks.get(identifier)
+            if lock is None:
+                lock = threading.Lock()
+                cls._entity_locks[identifier] = lock
+                logger.debug("Created new lock for identifier %s", identifier)
+            return lock
 
     def handle_create_grpc_error_response(
         self, context, response, error, status_code, **kwargs
@@ -400,21 +421,26 @@ class EntityService(vault_pb2_grpc.EntityServicer):
             )
 
         def initiate_creation():
-            success, pow_response = self.handle_pow_initialization(
-                context, request, response
-            )
-            if not success:
-                return pow_response
+            entity_lock = self._get_entity_lock(request.phone_number)
+            with entity_lock:
+                success, pow_response = self.handle_pow_initialization(
+                    context, request, response
+                )
 
-            message, expires = pow_response
+                if not success:
+                    return pow_response
 
-            signups.create_record(country_code=request.country_code, source="platforms")
+                message, expires = pow_response
 
-            return response(
-                requires_ownership_proof=True,
-                message=message,
-                next_attempt_timestamp=expires,
-            )
+                signups.create_record(
+                    country_code=request.country_code, source="platforms"
+                )
+
+                return response(
+                    requires_ownership_proof=True,
+                    message=message,
+                    next_attempt_timestamp=expires,
+                )
 
         def validate_fields():
             invalid_fields = self.handle_request_field_validation(
