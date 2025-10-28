@@ -27,10 +27,10 @@ DUMMY_PHONENUMBERS = get_configs(
 ).split(",")
 
 RATE_LIMIT_WINDOWS = [
-    {"duration": 2, "count": 1},  # 2 minute window
-    {"duration": 5, "count": 2},  # 5 minute window
-    {"duration": 15, "count": 3},  # 15 minute window
-    {"duration": 1440, "count": 4},  # 24 hour window
+    {"duration": 5, "count": 1},  # 5 minute window
+    {"duration": 10, "count": 2},  # 10 minute window
+    {"duration": 30, "count": 3},  # 30 minute window
+    {"duration": 120, "count": 4},  # 2 hour window
 ]
 
 
