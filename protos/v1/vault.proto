@@ -16,6 +16,8 @@ message CreateEntityRequest {
   string client_device_id_pub_key = 5;
   // The ownership proof response from the client.
   string ownership_proof_response = 6;
+  // The reCAPTCHA token for verification.
+  string recaptcha_token = 7;
 }
 
 // Response message for creating an entity.
@@ -46,6 +48,8 @@ message AuthenticateEntityRequest {
   string client_device_id_pub_key = 4;
   // The ownership proof response from the client.
   string ownership_proof_response = 5;
+  // The reCAPTCHA token for verification.
+  string recaptcha_token = 6;
 }
 
 // Response message for authenticating an entity.
@@ -245,6 +249,8 @@ message ResetPasswordRequest {
   string client_device_id_pub_key = 4;
   // The ownership proof response from the client.
   string ownership_proof_response = 5;
+  // The reCAPTCHA token for verification.
+  string recaptcha_token = 6;
 }
 
 // Response message for resetting an entity's password.
