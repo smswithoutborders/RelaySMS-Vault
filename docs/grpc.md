@@ -159,6 +159,7 @@ creation process.
 | requires_ownership_proof | bool   | An indicator if proof of ownership is required. `true` if required, `false` otherwise.                      |
 | next_attempt_timestamp   | int32  | The next available time to request another proof of ownership (in Unix seconds) if the first attempt fails. |
 | message                  | string | A response message from the server.                                                                         |
+| requires_captcha         | bool   | An indicator if captcha verification is required before proceeding. `true` if required, `false` otherwise.  |
 | captcha_id               | string | The captcha identifier (returned when captcha verification is required).                                    |
 | captcha_image            | string | Base64-encoded captcha image (returned when captcha verification is required).                              |
 
@@ -219,6 +220,17 @@ localhost:6000 vault.v1.Entity/CreateEntity <payload.json
 }
 ```
 
+**Sample response (when captcha is required)**
+
+```json
+{
+  "requiresCaptcha": true,
+  "message": "Solve the captcha to proceed.",
+  "captchaId": "captcha_id_123",
+  "captchaImage": "base64_encoded_captcha_image"
+}
+```
+
 ---
 
 #### Complete Creation
@@ -247,8 +259,6 @@ localhost:6000 vault.v1.Entity/CreateEntity <payload.json
 | ownership_proof_response | string | The proof response from the previous step.                                                                                                 |
 | client_publish_pub_key   | string | An `X25519` public key for publishing, `base64 encoded`.                                                                                   |
 | client_device_id_pub_key | string | An `X25519` public key for device ID, `base64 encoded`.                                                                                    |
-| captcha_id               | string | The captcha identifier (optional, used when captcha verification is required).                                                             |
-| captcha_answer           | string | The user's answer to the captcha (optional, used when completing a captcha challenge).                                                     |
 
 ---
 
@@ -380,6 +390,7 @@ of ownership for the phone number.
 | requires_password_reset  | bool   | An indicator if a user must reset their password. `true` if required, `false` otherwise.                    |
 | next_attempt_timestamp   | int32  | The next available time to request another proof of ownership (in Unix seconds) if the first attempt fails. |
 | message                  | string | A response message from the server.                                                                         |
+| requires_captcha         | bool   | An indicator if captcha verification is required before proceeding. `true` if required, `false` otherwise.  |
 | captcha_id               | string | The captcha identifier (returned when captcha verification is required).                                    |
 | captcha_image            | string | Base64-encoded captcha image (returned when captcha verification is required).                              |
 
@@ -439,6 +450,17 @@ localhost:6000 vault.v1.Entity/AuthenticateEntity <payload.json
 }
 ```
 
+**Sample response (when captcha is required)**
+
+```json
+{
+  "requiresCaptcha": true,
+  "message": "Solve the captcha to proceed.",
+  "captchaId": "captcha_id_123",
+  "captchaImage": "base64_encoded_captcha_image"
+}
+```
+
 ---
 
 #### Complete Authentication
@@ -467,8 +489,6 @@ localhost:6000 vault.v1.Entity/AuthenticateEntity <payload.json
 | ownership_proof_response | string | The proof response from the previous step.                                                                                            |
 | client_publish_pub_key   | string | An `X25519` public key for publishing, `base64 encoded`.                                                                              |
 | client_device_id_pub_key | string | An `X25519` public key for device ID, `base64 encoded`.                                                                               |
-| captcha_id               | string | The captcha identifier (optional, used when captcha verification is required).                                                        |
-| captcha_answer           | string | The user's answer to the captcha (optional, used when completing a captcha challenge).                                                |
 
 ---
 
@@ -664,7 +684,7 @@ localhost:6000 vault.v1.Entity/CreateBridgeEntity <payload.json
 
 | Field                    | Type   | Description                                                                                                                                  |
 | ------------------------ | ------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| phone_number             | string | The phone number associated with the bridge entity. It should be in [E164 format](https://en.wikipedia.org/wiki/E.164), e.g., +237123456789. |
+| phone_number             | string | The phone number associated with the bridge entity. It should be in [E164 format](https://en.wikipedia.org/wiki/E.164). e.g., +237123456789. |
 | country_code             | string | The [ISO 3166-1 alpha-2 code](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2) associated with the phone number. e.g., `CM` for Cameroon.   |
 | ownership_proof_response | string | The proof response from the previous step.                                                                                                   |
 
@@ -1036,6 +1056,7 @@ of ownership for the phone number.
 | requires_ownership_proof | bool   | An indicator if proof of ownership is required. `true` if required, `false` otherwise.                      |
 | next_attempt_timestamp   | int32  | The next available time to request another proof of ownership (in Unix seconds) if the first attempt fails. |
 | message                  | string | A response message from the server.                                                                         |
+| requires_captcha         | bool   | An indicator if captcha verification is required before proceeding. `true` if required, `false` otherwise.  |
 | captcha_id               | string | The captcha identifier (returned when captcha verification is required).                                    |
 | captcha_image            | string | Base64-encoded captcha image (returned when captcha verification is required).                              |
 
@@ -1095,6 +1116,17 @@ localhost:6000 vault.v1.Entity/ResetPassword <payload.json
 }
 ```
 
+**Sample response (when captcha is required)**
+
+```json
+{
+  "requiresCaptcha": true,
+  "message": "Solve the captcha to proceed.",
+  "captchaId": "captcha_id_123",
+  "captchaImage": "base64_encoded_captcha_image"
+}
+```
+
 ---
 
 #### Complete Reset
@@ -1123,8 +1155,6 @@ localhost:6000 vault.v1.Entity/ResetPassword <payload.json
 | ownership_proof_response | string | The proof response from the previous step.                                                                                            |
 | client_publish_pub_key   | string | An `X25519` public key for publishing, `base64 encoded`.                                                                              |
 | client_device_id_pub_key | string | An `X25519` public key for device ID, `base64 encoded`.                                                                               |
-| captcha_id               | string | The captcha identifier (optional, used when captcha verification is required).                                                        |
-| captcha_answer           | string | The user's answer to the captcha (optional, used when completing a captcha challenge).                                                |
 
 ---
 

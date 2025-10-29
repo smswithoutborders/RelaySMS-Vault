@@ -40,6 +40,8 @@ message CreateEntityResponse {
   string captcha_id = 7;
   // The captcha image (base64 encoded)
   string captcha_image = 8;
+  // Indicates if captcha verification is required before proceeding
+  bool requires_captcha = 9;
 }
 
 // Request message for authenticating an entity.
@@ -80,6 +82,8 @@ message AuthenticateEntityResponse {
   string captcha_id = 8;
   // The captcha image (base64 encoded)
   string captcha_image = 9;
+  // Indicates if captcha verification is required before proceeding
+  bool requires_captcha = 10;
 }
 
 // Request message for listing entity's stored tokens.
@@ -285,6 +289,8 @@ message ResetPasswordResponse {
   string captcha_id = 7;
   // The captcha image (base64 encoded)
   string captcha_image = 8;
+  // Indicates if captcha verification is required before proceeding
+  bool requires_captcha = 9;
 }
 
 // Request message for updating an entity's password.

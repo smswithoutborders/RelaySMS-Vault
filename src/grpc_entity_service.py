@@ -256,50 +256,8 @@ class EntityService(vault_pb2_grpc.EntityServicer):
         return success, (message, expires)
 
     def handle_captcha_verification(self, context, request, response):
-        """
-        Handle captcha verification for entity operations.
-
-        Args:
-            context: gRPC context.
-            request: gRPC request object.
-            response: gRPC response object.
-
-        Returns:
-            tuple: (success: bool, error_response or None)
-                - If captcha is disabled: (True, None)
-                - If captcha verification passes: (True, None)
-                - If captcha verification fails: (False, error_response)
-        """
-        if not is_captcha_enabled():
-            logger.debug("Captcha verification is disabled")
-            return True, None
-
-        captcha_id = getattr(request, "captcha_id", None)
-        captcha_answer = getattr(request, "captcha_answer", None)
-
-        logger.debug(
-            "Captcha verification - ID: %s, Answer provided: %s",
-            captcha_id,
-            bool(captcha_answer),
-        )
-
-        if not captcha_id:
-            return False, self.handle_create_grpc_error_response(
-                context,
-                response,
-                "captcha_id is required",
-                grpc.StatusCode.INVALID_ARGUMENT,
-            )
-
-        if not captcha_answer:
-            return False, self.handle_create_grpc_error_response(
-                context,
-                response,
-                "captcha_answer is required",
-                grpc.StatusCode.INVALID_ARGUMENT,
-            )
-
-        success, message = verify_captcha(captcha_id, captcha_answer)
+        """Handle captcha verification for entity operations."""
+        success, message = verify_captcha(request.captcha_id, request.captcha_answer)
         if not success:
             return False, self.handle_create_grpc_error_response(
                 context,
@@ -311,23 +269,7 @@ class EntityService(vault_pb2_grpc.EntityServicer):
         return True, None
 
     def handle_captcha_retrieval(self, context, response):
-        """
-        Handle captcha retrieval for entity operations.
-
-        Args:
-            context: gRPC context.
-            response: gRPC response object.
-
-        Returns:
-            tuple: (success: bool, result)
-                - If captcha is disabled: (True, ("", ""))
-                - If captcha retrieval succeeds: (True, (captcha_id, captcha_image))
-                - If captcha retrieval fails: (False, error_response)
-        """
-        if not is_captcha_enabled():
-            logger.debug("Captcha is disabled, skipping retrieval")
-            return True, ("", "")
-
+        """Handle captcha retrieval for entity operations."""
         captcha_data, captcha_message = get_captcha()
         if not captcha_data:
             return False, self.handle_create_grpc_error_response(
@@ -453,12 +395,6 @@ class EntityService(vault_pb2_grpc.EntityServicer):
             request.phone_number = self.clean_phone_number(request.phone_number)
 
         def complete_creation():
-            captcha_success, captcha_error = self.handle_captcha_verification(
-                context, request, response
-            )
-            if not captcha_success:
-                return captcha_error
-
             success, pow_response = self.handle_pow_verification(
                 context, request, response
             )
@@ -516,13 +452,38 @@ class EntityService(vault_pb2_grpc.EntityServicer):
             )
 
         def initiate_creation():
-            captcha_success, captcha_result = self.handle_captcha_retrieval(
-                context, response
-            )
-            if not captcha_success:
-                return captcha_result
+            if is_captcha_enabled():
+                logger.debug("Captcha verification is enabled.")
+                captcha_id = getattr(request, "captcha_id", None)
+                captcha_answer = getattr(request, "captcha_answer", None)
 
-            captcha_id, captcha_image = captcha_result
+                if not captcha_id or not captcha_answer:
+                    captcha_success, captcha_result = self.handle_captcha_retrieval(
+                        context, response
+                    )
+                    if not captcha_success:
+                        return captcha_result
+
+                    captcha_id, captcha_image = captcha_result
+
+                    return response(
+                        requires_captcha=True,
+                        message="Solve the captcha to proceed.",
+                        captcha_id=captcha_id,
+                        captcha_image=captcha_image,
+                    )
+
+                logger.debug(
+                    "Captcha verification - ID: %s, Answer provided: %s",
+                    captcha_id,
+                    bool(captcha_answer),
+                )
+
+                captcha_success, captcha_error = self.handle_captcha_verification(
+                    context, request, response
+                )
+                if not captcha_success:
+                    return captcha_error
 
             entity_lock = self._get_entity_lock(request.phone_number)
             with entity_lock:
@@ -543,8 +504,6 @@ class EntityService(vault_pb2_grpc.EntityServicer):
                     requires_ownership_proof=True,
                     message=message,
                     next_attempt_timestamp=expires,
-                    captcha_id=captcha_id,
-                    captcha_image=captcha_image,
                 )
 
         def validate_fields():
@@ -643,13 +602,38 @@ class EntityService(vault_pb2_grpc.EntityServicer):
 
             clear_rate_limit(entity_obj.eid)
 
-            captcha_success, captcha_result = self.handle_captcha_retrieval(
-                context, response
-            )
-            if not captcha_success:
-                return captcha_result
+            if is_captcha_enabled():
+                logger.debug("Captcha verification is enabled.")
+                captcha_id = getattr(request, "captcha_id", None)
+                captcha_answer = getattr(request, "captcha_answer", None)
 
-            captcha_id, captcha_image = captcha_result
+                if not captcha_id or not captcha_answer:
+                    captcha_success, captcha_result = self.handle_captcha_retrieval(
+                        context, response
+                    )
+                    if not captcha_success:
+                        return captcha_result
+
+                    captcha_id, captcha_image = captcha_result
+
+                    return response(
+                        requires_captcha=True,
+                        message="Solve the captcha to proceed.",
+                        captcha_id=captcha_id,
+                        captcha_image=captcha_image,
+                    )
+
+                logger.debug(
+                    "Captcha verification - ID: %s, Answer provided: %s",
+                    captcha_id,
+                    bool(captcha_answer),
+                )
+
+                captcha_success, captcha_error = self.handle_captcha_verification(
+                    context, request, response
+                )
+                if not captcha_success:
+                    return captcha_error
 
             entity_lock = self._get_entity_lock(request.phone_number)
             with entity_lock:
@@ -668,17 +652,9 @@ class EntityService(vault_pb2_grpc.EntityServicer):
                     requires_ownership_proof=True,
                     message=message,
                     next_attempt_timestamp=expires,
-                    captcha_id=captcha_id,
-                    captcha_image=captcha_image,
                 )
 
         def complete_authentication(entity_obj):
-            captcha_success, captcha_error = self.handle_captcha_verification(
-                context, request, response
-            )
-            if not captcha_success:
-                return captcha_error
-
             success, pow_response = self.handle_pow_verification(
                 context, request, response
             )
@@ -942,13 +918,38 @@ class EntityService(vault_pb2_grpc.EntityServicer):
         response = vault_pb2.ResetPasswordResponse
 
         def initiate_reset(entity_obj):
-            captcha_success, captcha_result = self.handle_captcha_retrieval(
-                context, response
-            )
-            if not captcha_success:
-                return captcha_result
+            if is_captcha_enabled():
+                logger.debug("Captcha verification is enabled.")
+                captcha_id = getattr(request, "captcha_id", None)
+                captcha_answer = getattr(request, "captcha_answer", None)
 
-            captcha_id, captcha_image = captcha_result
+                if not captcha_id or not captcha_answer:
+                    captcha_success, captcha_result = self.handle_captcha_retrieval(
+                        context, response
+                    )
+                    if not captcha_success:
+                        return captcha_result
+
+                    captcha_id, captcha_image = captcha_result
+
+                    return response(
+                        requires_captcha=True,
+                        message="Solve the captcha to proceed.",
+                        captcha_id=captcha_id,
+                        captcha_image=captcha_image,
+                    )
+
+                logger.debug(
+                    "Captcha verification - ID: %s, Answer provided: %s",
+                    captcha_id,
+                    bool(captcha_answer),
+                )
+
+                captcha_success, captcha_error = self.handle_captcha_verification(
+                    context, request, response
+                )
+                if not captcha_success:
+                    return captcha_error
 
             entity_lock = self._get_entity_lock(request.phone_number)
             with entity_lock:
@@ -967,17 +968,9 @@ class EntityService(vault_pb2_grpc.EntityServicer):
                     requires_ownership_proof=True,
                     message=message,
                     next_attempt_timestamp=expires,
-                    captcha_id=captcha_id,
-                    captcha_image=captcha_image,
                 )
 
         def complete_reset(entity_obj):
-            captcha_success, captcha_error = self.handle_captcha_verification(
-                context, request, response
-            )
-            if not captcha_success:
-                return captcha_error
-
             success, pow_response = self.handle_pow_verification(
                 context, request, response
             )
