@@ -51,7 +51,24 @@ def verify_recaptcha_token(token, remote_ip=None):
     try:
         response = requests.post(RECAPTCHA_VERIFY_URL, params=payload, timeout=10)
         response.raise_for_status()
-        result = response.json()
+
+        logger.debug("reCAPTCHA API response: %s", response.text)
+
+        if not response.content:
+            logger.error("reCAPTCHA API returned empty response")
+            return (
+                False,
+                "reCAPTCHA service is temporarily unavailable. Please try again.",
+            )
+
+        try:
+            result = response.json()
+        except ValueError as json_err:
+            logger.error("Failed to parse reCAPTCHA response: %s", json_err)
+            return (
+                False,
+                "reCAPTCHA service is temporarily unavailable. Please try again.",
+            )
 
         if not result.get("success"):
             error_code = result.get("error-codes", ["unknown"])[0]
