@@ -17,7 +17,6 @@ from src.utils import (
     generate_eid,
     load_key,
     generate_keypair_and_public_key,
-    load_crypto_metadata,
     get_shared_key,
     decrypt_and_decode,
 )
