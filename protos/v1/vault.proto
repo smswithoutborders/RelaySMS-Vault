@@ -261,12 +261,10 @@ message ResetPasswordRequest {
   string client_device_id_pub_key = 4;
   // The ownership proof response from the client.
   string ownership_proof_response = 5;
-  // The reCAPTCHA token for verification.
-  string recaptcha_token = 6;
   // The captcha identifier
-  string captcha_id = 7;
+  string captcha_id = 6;
   // The captcha answer from the user
-  string captcha_answer = 8;
+  string captcha_answer = 7;
 }
 
 // Response message for resetting an entity's password.

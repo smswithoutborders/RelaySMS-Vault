@@ -140,6 +140,8 @@ creation process.
 | password                 | string | A secure password for the entity.                                                                                                          |
 | client_publish_pub_key   | string | An `X25519` public key for publishing, `base64 encoded`.                                                                                   |
 | client_device_id_pub_key | string | An `X25519` public key for device ID, `base64 encoded`.                                                                                    |
+| captcha_id               | string | The captcha identifier (optional, used when captcha verification is required).                                                             |
+| captcha_answer           | string | The user's answer to the captcha (optional, used when completing a captcha challenge).                                                     |
 
 ---
 
@@ -157,6 +159,8 @@ creation process.
 | requires_ownership_proof | bool   | An indicator if proof of ownership is required. `true` if required, `false` otherwise.                      |
 | next_attempt_timestamp   | int32  | The next available time to request another proof of ownership (in Unix seconds) if the first attempt fails. |
 | message                  | string | A response message from the server.                                                                         |
+| captcha_id               | string | The captcha identifier (returned when captcha verification is required).                                    |
+| captcha_image            | string | Base64-encoded captcha image (returned when captcha verification is required).                              |
 
 ---
 
@@ -243,6 +247,8 @@ localhost:6000 vault.v1.Entity/CreateEntity <payload.json
 | ownership_proof_response | string | The proof response from the previous step.                                                                                                 |
 | client_publish_pub_key   | string | An `X25519` public key for publishing, `base64 encoded`.                                                                                   |
 | client_device_id_pub_key | string | An `X25519` public key for device ID, `base64 encoded`.                                                                                    |
+| captcha_id               | string | The captcha identifier (optional, used when captcha verification is required).                                                             |
+| captcha_answer           | string | The user's answer to the captcha (optional, used when completing a captcha challenge).                                                     |
 
 ---
 
@@ -354,6 +360,8 @@ of ownership for the phone number.
 | password                 | string | A secure password for the entity.                                                                                                     |
 | client_publish_pub_key   | string | An `X25519` public key for publishing, `base64 encoded`.                                                                              |
 | client_device_id_pub_key | string | An `X25519` public key for device ID, `base64 encoded`.                                                                               |
+| captcha_id               | string | The captcha identifier (optional, used when captcha verification is required).                                                        |
+| captcha_answer           | string | The user's answer to the captcha (optional, used when completing a captcha challenge).                                                |
 
 ---
 
@@ -372,6 +380,8 @@ of ownership for the phone number.
 | requires_password_reset  | bool   | An indicator if a user must reset their password. `true` if required, `false` otherwise.                    |
 | next_attempt_timestamp   | int32  | The next available time to request another proof of ownership (in Unix seconds) if the first attempt fails. |
 | message                  | string | A response message from the server.                                                                         |
+| captcha_id               | string | The captcha identifier (returned when captcha verification is required).                                    |
+| captcha_image            | string | Base64-encoded captcha image (returned when captcha verification is required).                              |
 
 ---
 
@@ -457,6 +467,8 @@ localhost:6000 vault.v1.Entity/AuthenticateEntity <payload.json
 | ownership_proof_response | string | The proof response from the previous step.                                                                                            |
 | client_publish_pub_key   | string | An `X25519` public key for publishing, `base64 encoded`.                                                                              |
 | client_device_id_pub_key | string | An `X25519` public key for device ID, `base64 encoded`.                                                                               |
+| captcha_id               | string | The captcha identifier (optional, used when captcha verification is required).                                                        |
+| captcha_answer           | string | The user's answer to the captcha (optional, used when completing a captcha challenge).                                                |
 
 ---
 
@@ -1005,6 +1017,8 @@ of ownership for the phone number.
 | new_password             | string | A new secure password for the entity.                                                                                                 |
 | client_publish_pub_key   | string | An `X25519` public key for publishing, `base64 encoded`.                                                                              |
 | client_device_id_pub_key | string | An `X25519` public key for device ID, `base64 encoded`.                                                                               |
+| captcha_id               | string | The captcha identifier (optional, used when captcha verification is required).                                                        |
+| captcha_answer           | string | The user's answer to the captcha (optional, used when completing a captcha challenge).                                                |
 
 ---
 
@@ -1022,6 +1036,8 @@ of ownership for the phone number.
 | requires_ownership_proof | bool   | An indicator if proof of ownership is required. `true` if required, `false` otherwise.                      |
 | next_attempt_timestamp   | int32  | The next available time to request another proof of ownership (in Unix seconds) if the first attempt fails. |
 | message                  | string | A response message from the server.                                                                         |
+| captcha_id               | string | The captcha identifier (returned when captcha verification is required).                                    |
+| captcha_image            | string | Base64-encoded captcha image (returned when captcha verification is required).                              |
 
 ---
 
@@ -1107,6 +1123,8 @@ localhost:6000 vault.v1.Entity/ResetPassword <payload.json
 | ownership_proof_response | string | The proof response from the previous step.                                                                                            |
 | client_publish_pub_key   | string | An `X25519` public key for publishing, `base64 encoded`.                                                                              |
 | client_device_id_pub_key | string | An `X25519` public key for device ID, `base64 encoded`.                                                                               |
+| captcha_id               | string | The captcha identifier (optional, used when captcha verification is required).                                                        |
+| captcha_answer           | string | The user's answer to the captcha (optional, used when completing a captcha challenge).                                                |
 
 ---
 
