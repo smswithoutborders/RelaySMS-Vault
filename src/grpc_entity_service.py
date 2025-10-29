@@ -271,6 +271,7 @@ class EntityService(vault_pb2_grpc.EntityServicer):
             return True, None
 
         recaptcha_token = getattr(request, "recaptcha_token", None)
+        logger.debug("reCAPTCHA token received: %s", recaptcha_token)
         if not recaptcha_token:
             return False, self.handle_create_grpc_error_response(
                 context,
@@ -279,7 +280,7 @@ class EntityService(vault_pb2_grpc.EntityServicer):
                 grpc.StatusCode.INVALID_ARGUMENT,
             )
 
-        success, message, score = verify_recaptcha_token(recaptcha_token)
+        success, message = verify_recaptcha_token(recaptcha_token)
         if not success:
             return False, self.handle_create_grpc_error_response(
                 context,
@@ -457,6 +458,12 @@ class EntityService(vault_pb2_grpc.EntityServicer):
             )
 
         def initiate_creation():
+            recaptcha_success, recaptcha_error = self.handle_recaptcha_verification(
+                context, request, response
+            )
+            if not recaptcha_success:
+                return recaptcha_error
+
             entity_lock = self._get_entity_lock(request.phone_number)
             with entity_lock:
                 success, pow_response = self.handle_pow_initialization(
@@ -509,12 +516,6 @@ class EntityService(vault_pb2_grpc.EntityServicer):
             invalid_fields_response = validate_fields()
             if invalid_fields_response:
                 return invalid_fields_response
-
-            recaptcha_success, recaptcha_error = self.handle_recaptcha_verification(
-                context, request, response
-            )
-            if not recaptcha_success:
-                return recaptcha_error
 
             phone_number_hash = generate_hmac(HASHING_KEY, request.phone_number)
             entity_obj = find_entity(phone_number_hash=phone_number_hash)
@@ -579,6 +580,12 @@ class EntityService(vault_pb2_grpc.EntityServicer):
                 )
 
             clear_rate_limit(entity_obj.eid)
+
+            recaptcha_success, recaptcha_error = self.handle_recaptcha_verification(
+                context, request, response
+            )
+            if not recaptcha_success:
+                return recaptcha_error
 
             entity_lock = self._get_entity_lock(request.phone_number)
             with entity_lock:
@@ -661,12 +668,6 @@ class EntityService(vault_pb2_grpc.EntityServicer):
             invalid_fields_response = validate_fields()
             if invalid_fields_response:
                 return invalid_fields_response
-
-            recaptcha_success, recaptcha_error = self.handle_recaptcha_verification(
-                context, request, response
-            )
-            if not recaptcha_success:
-                return recaptcha_error
 
             phone_number_hash = generate_hmac(HASHING_KEY, request.phone_number)
             entity_obj = find_entity(phone_number_hash=phone_number_hash)
@@ -869,6 +870,12 @@ class EntityService(vault_pb2_grpc.EntityServicer):
         response = vault_pb2.ResetPasswordResponse
 
         def initiate_reset(entity_obj):
+            recaptcha_success, recaptcha_error = self.handle_recaptcha_verification(
+                context, request, response
+            )
+            if not recaptcha_success:
+                return recaptcha_error
+
             entity_lock = self._get_entity_lock(request.phone_number)
             with entity_lock:
                 success, pow_response = self.handle_pow_initialization(
@@ -965,12 +972,6 @@ class EntityService(vault_pb2_grpc.EntityServicer):
             invalid_fields_response = validate_fields()
             if invalid_fields_response:
                 return invalid_fields_response
-
-            recaptcha_success, recaptcha_error = self.handle_recaptcha_verification(
-                context, request, response
-            )
-            if not recaptcha_success:
-                return recaptcha_error
 
             phone_number_hash = generate_hmac(HASHING_KEY, request.phone_number)
             entity_obj = find_entity(phone_number_hash=phone_number_hash)
