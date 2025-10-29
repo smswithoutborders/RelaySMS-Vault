@@ -5,6 +5,7 @@ Public License was not distributed with this file, see <https://www.gnu.org/lice
 """
 
 import requests
+import json
 
 from src.utils import get_configs
 from base_logger import get_logger
@@ -52,8 +53,6 @@ def verify_recaptcha_token(token, remote_ip=None):
         response = requests.post(RECAPTCHA_VERIFY_URL, params=payload, timeout=10)
         response.raise_for_status()
 
-        logger.debug("reCAPTCHA API response: %s", response.text)
-
         if not response.content:
             logger.error("reCAPTCHA API returned empty response")
             return (
@@ -62,9 +61,18 @@ def verify_recaptcha_token(token, remote_ip=None):
             )
 
         try:
-            result = response.json()
-        except ValueError as json_err:
-            logger.error("Failed to parse reCAPTCHA response: %s", json_err)
+            # Remove XSSI protection prefix if present (e.g., )]}'  )
+            response_text = response.text.strip()
+            if response_text.startswith(")]}'"):
+                response_text = response_text[4:].strip()
+
+            result = json.loads(response_text)
+        except (ValueError, json.JSONDecodeError) as json_err:
+            logger.error(
+                "Failed to parse reCAPTCHA response: %s. Response: %s",
+                json_err,
+                response.text,
+            )
             return (
                 False,
                 "reCAPTCHA service is temporarily unavailable. Please try again.",
