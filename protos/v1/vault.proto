@@ -16,10 +16,8 @@ message CreateEntityRequest {
   string client_device_id_pub_key = 5;
   // The ownership proof response from the client.
   string ownership_proof_response = 6;
-  // The captcha identifier
-  string captcha_id = 7;
-  // The captcha answer from the user
-  string captcha_answer = 8;
+  // The captcha token
+  string captcha_token = 7;
 }
 
 // Response message for creating an entity.
@@ -36,12 +34,6 @@ message CreateEntityResponse {
   string message = 5;
   // The next available time to request another proof of ownership.
   int32 next_attempt_timestamp = 6;
-  // The captcha identifier
-  string captcha_id = 7;
-  // The captcha image (base64 encoded)
-  string captcha_image = 8;
-  // Indicates if captcha verification is required before proceeding
-  bool requires_captcha = 9;
 }
 
 // Request message for authenticating an entity.
@@ -56,10 +48,8 @@ message AuthenticateEntityRequest {
   string client_device_id_pub_key = 4;
   // The ownership proof response from the client.
   string ownership_proof_response = 5;
-  // The captcha identifier
-  string captcha_id = 6;
-  // The captcha answer from the user
-  string captcha_answer = 7;
+  // The captcha token
+  string captcha_token = 6;
 }
 
 // Response message for authenticating an entity.
@@ -78,12 +68,6 @@ message AuthenticateEntityResponse {
   int32 next_attempt_timestamp = 6;
   // indicates if user must reset their password
   bool requires_password_reset = 7;
-  // The captcha identifier
-  string captcha_id = 8;
-  // The captcha image (base64 encoded)
-  string captcha_image = 9;
-  // Indicates if captcha verification is required before proceeding
-  bool requires_captcha = 10;
 }
 
 // Request message for listing entity's stored tokens.
@@ -265,10 +249,8 @@ message ResetPasswordRequest {
   string client_device_id_pub_key = 4;
   // The ownership proof response from the client.
   string ownership_proof_response = 5;
-  // The captcha identifier
-  string captcha_id = 6;
-  // The captcha answer from the user
-  string captcha_answer = 7;
+  // The captcha token
+  string captcha_token = 6;
 }
 
 // Response message for resetting an entity's password.
@@ -285,12 +267,6 @@ message ResetPasswordResponse {
   string message = 5;
   // The next available time to request another proof of ownership.
   int32 next_attempt_timestamp = 6;
-  // The captcha identifier
-  string captcha_id = 7;
-  // The captcha image (base64 encoded)
-  string captcha_image = 8;
-  // Indicates if captcha verification is required before proceeding
-  bool requires_captcha = 9;
 }
 
 // Request message for updating an entity's password.
