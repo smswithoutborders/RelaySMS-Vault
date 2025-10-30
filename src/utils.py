@@ -484,7 +484,7 @@ def validate_metrics_args(
     start_dt = parse_date(start_date, "start_date")
     end_dt = parse_date(end_date, "end_date")
 
-    if start_dt >= end_dt:
+    if start_dt > end_dt:
         raise ValueError("'start_date' must be earlier than 'end_date'.")
 
     for arg, name in [(top, "top"), (page, "page"), (page_size, "page_size")]:
