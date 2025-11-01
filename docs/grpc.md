@@ -76,7 +76,7 @@ python -m grpc_tools.protoc -I protos/v1 --python_out=. --grpc_python_out=. prot
 
 ### Starting the Server
 
-#### Quick Start (for Development Only):
+#### Quick Start (for Development Only)
 
 #### Public Server
 
@@ -140,6 +140,7 @@ creation process.
 | password                 | string | A secure password for the entity.                                                                                                          |
 | client_publish_pub_key   | string | An `X25519` public key for publishing, `base64 encoded`.                                                                                   |
 | client_device_id_pub_key | string | An `X25519` public key for device ID, `base64 encoded`.                                                                                    |
+| captcha_token            | string | The captcha token to be verified.                                                                                                          |
 
 ---
 
@@ -354,6 +355,7 @@ of ownership for the phone number.
 | password                 | string | A secure password for the entity.                                                                                                     |
 | client_publish_pub_key   | string | An `X25519` public key for publishing, `base64 encoded`.                                                                              |
 | client_device_id_pub_key | string | An `X25519` public key for device ID, `base64 encoded`.                                                                               |
+| captcha_token            | string | The captcha token to be verified.                                                                                                     |
 
 ---
 
@@ -652,7 +654,7 @@ localhost:6000 vault.v1.Entity/CreateBridgeEntity <payload.json
 
 | Field                    | Type   | Description                                                                                                                                  |
 | ------------------------ | ------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| phone_number             | string | The phone number associated with the bridge entity. It should be in [E164 format](https://en.wikipedia.org/wiki/E.164), e.g., +237123456789. |
+| phone_number             | string | The phone number associated with the bridge entity. It should be in [E164 format](https://en.wikipedia.org/wiki/E.164). e.g., +237123456789. |
 | country_code             | string | The [ISO 3166-1 alpha-2 code](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2) associated with the phone number. e.g., `CM` for Cameroon.   |
 | ownership_proof_response | string | The proof response from the previous step.                                                                                                   |
 
@@ -1005,6 +1007,7 @@ of ownership for the phone number.
 | new_password             | string | A new secure password for the entity.                                                                                                 |
 | client_publish_pub_key   | string | An `X25519` public key for publishing, `base64 encoded`.                                                                              |
 | client_device_id_pub_key | string | An `X25519` public key for device ID, `base64 encoded`.                                                                               |
+| captcha_token            | string | The captcha token to be verified.                                                                                                     |
 
 ---
 

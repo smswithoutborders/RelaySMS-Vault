@@ -89,7 +89,9 @@ class Token(Model):
 class PasswordRateLimit(Model):
     """Model representing Password Rate Limits Table."""
 
-    eid = ForeignKeyField(Entity, backref="password_rate_limit", column_name="eid")
+    eid = ForeignKeyField(
+        Entity, backref="password_rate_limit", column_name="eid", on_delete="CASCADE"
+    )
     attempt_count = IntegerField(default=0)
     date_expires = DateTimeField(null=True)
     date_created = DateTimeField(default=datetime.datetime.now)

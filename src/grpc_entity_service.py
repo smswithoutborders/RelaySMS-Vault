@@ -22,6 +22,7 @@ from src.entity import create_entity, find_entity
 from src.tokens import fetch_entity_tokens, update_entity_tokens
 from src.crypto import generate_hmac, verify_hmac
 from src.otp_service import send_otp, verify_otp
+from src.recaptcha import is_captcha_enabled, verify_captcha
 from src.utils import (
     load_key,
     get_configs,
@@ -254,6 +255,27 @@ class EntityService(vault_pb2_grpc.EntityServicer):
             )
         return success, (message, expires)
 
+    def handle_captcha_verification(self, context, request, response):
+        """Handle captcha verification for entity operations."""
+        if not getattr(request, "captcha_token", None):
+            return False, self.handle_create_grpc_error_response(
+                context,
+                response,
+                "Missing required field: captcha_token",
+                grpc.StatusCode.INVALID_ARGUMENT,
+            )
+
+        success, message = verify_captcha(request.captcha_token)
+        if not success:
+            return False, self.handle_create_grpc_error_response(
+                context,
+                response,
+                message,
+                grpc.StatusCode.PERMISSION_DENIED,
+            )
+
+        return True, None
+
     def handle_long_lived_token_validation(self, request, context, response):
         """
         Handles the validation of a long-lived token from the request.
@@ -421,6 +443,15 @@ class EntityService(vault_pb2_grpc.EntityServicer):
             )
 
         def initiate_creation():
+            if is_captcha_enabled():
+                logger.debug("Captcha verification is enabled.")
+
+                captcha_success, captcha_error = self.handle_captcha_verification(
+                    context, request, response
+                )
+                if not captcha_success:
+                    return captcha_error
+
             entity_lock = self._get_entity_lock(request.phone_number)
             with entity_lock:
                 success, pow_response = self.handle_pow_initialization(
@@ -537,6 +568,15 @@ class EntityService(vault_pb2_grpc.EntityServicer):
                 )
 
             clear_rate_limit(entity_obj.eid)
+
+            if is_captcha_enabled():
+                logger.debug("Captcha verification is enabled.")
+
+                captcha_success, captcha_error = self.handle_captcha_verification(
+                    context, request, response
+                )
+                if not captcha_success:
+                    return captcha_error
 
             entity_lock = self._get_entity_lock(request.phone_number)
             with entity_lock:
@@ -821,22 +861,33 @@ class EntityService(vault_pb2_grpc.EntityServicer):
         response = vault_pb2.ResetPasswordResponse
 
         def initiate_reset(entity_obj):
-            success, pow_response = self.handle_pow_initialization(
-                context, request, response
-            )
-            if not success:
-                return pow_response
+            if is_captcha_enabled():
+                logger.debug("Captcha verification is enabled.")
 
-            message, expires = pow_response
-            entity_obj.device_id = None
-            entity_obj.server_state = None
-            entity_obj.save()
+                captcha_success, captcha_error = self.handle_captcha_verification(
+                    context, request, response
+                )
+                if not captcha_success:
+                    return captcha_error
 
-            return response(
-                requires_ownership_proof=True,
-                message=message,
-                next_attempt_timestamp=expires,
-            )
+            entity_lock = self._get_entity_lock(request.phone_number)
+            with entity_lock:
+                success, pow_response = self.handle_pow_initialization(
+                    context, request, response
+                )
+                if not success:
+                    return pow_response
+
+                message, expires = pow_response
+                entity_obj.device_id = None
+                entity_obj.server_state = None
+                entity_obj.save()
+
+                return response(
+                    requires_ownership_proof=True,
+                    message=message,
+                    next_attempt_timestamp=expires,
+                )
 
         def complete_reset(entity_obj):
             success, pow_response = self.handle_pow_verification(
