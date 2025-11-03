@@ -103,8 +103,6 @@ def send_otp(phone_number, message_body=None):
         )
 
     region_code = get_phonenumber_region_code(phone_number)
-    print(type(OTP_ALLOWED_COUNTRIES))
-    print(OTP_ALLOWED_COUNTRIES)
     if OTP_ALLOWED_COUNTRIES and region_code not in OTP_ALLOWED_COUNTRIES:
         logger.info("OTP not allowed for country: %s", region_code)
         return (
