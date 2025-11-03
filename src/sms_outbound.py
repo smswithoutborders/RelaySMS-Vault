@@ -20,6 +20,13 @@ QUEUEDROID_QUEUE_ID = get_configs("QUEUEDROID_QUEUE_ID")
 QUEUEDROID_SUPPORTED_VERIFICATION_REGION_CODES = get_configs(
     "QUEUEDROID_SUPPORTED_VERIFICATION_REGION_CODES"
 )
+QUEUEDROID_SUPPORTED_VERIFICATION_REGION_CODES = [
+    c.strip().strip("'\"").upper()
+    for c in (QUEUEDROID_SUPPORTED_VERIFICATION_REGION_CODES or "")
+    .strip("[]")
+    .split(",")
+    if c
+]
 
 logger = get_logger(__name__)
 
