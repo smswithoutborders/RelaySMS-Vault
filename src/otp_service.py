@@ -26,6 +26,14 @@ DUMMY_PHONENUMBERS = get_configs(
     "DUMMY_PHONENUMBER", default_value="+237123456789"
 ).split(",")
 
+OTP_ENABLED = get_configs("OTP_ENABLED", default_value="true")
+OTP_ENABLED = OTP_ENABLED.lower() == "true" if OTP_ENABLED is not None else True
+OTP_ALLOWED_COUNTRIES = get_configs("OTP_ALLOWED_COUNTRIES")
+OTP_ALLOWED_COUNTRIES = [
+    c.strip().strip("'\"").upper()
+    for c in (OTP_ALLOWED_COUNTRIES or "").strip("[]").split(",")
+    if c
+]
 RATE_LIMIT_WINDOWS = [
     {"duration": 5, "count": 1},  # 5 minute window
     {"duration": 10, "count": 2},  # 10 minute window
@@ -85,11 +93,28 @@ def send_otp(phone_number, message_body=None):
               otherwise, None.
     """
     logger.debug("Sending OTP to phone number...")
+
+    if not OTP_ENABLED:
+        logger.info("OTP service is currently disabled")
+        return (
+            False,
+            "OTP service is temporarily unavailable. Please try again later or contact support.",
+            None,
+        )
+
+    region_code = get_phonenumber_region_code(phone_number)
+    if OTP_ALLOWED_COUNTRIES and region_code not in OTP_ALLOWED_COUNTRIES:
+        logger.info("OTP not allowed for country: %s", region_code)
+        return (
+            False,
+            "OTP service is not available for your region. Please contact support for assistance.",
+            None,
+        )
+
     if is_rate_limited(phone_number):
         return False, "Too many OTP requests. Please wait and try again later.", None
 
     expires = None
-    region_code = get_phonenumber_region_code(phone_number)
 
     if MOCK_OTP:
         success, message = mock_send_otp()
@@ -132,13 +157,27 @@ def verify_otp(phone_number, otp, use_twilio=True):
             - A message indicating the result of the OTP verification process.
     """
     logger.debug("Verifying OTP for phone number...")
+
+    if not OTP_ENABLED:
+        logger.info("OTP service is currently disabled")
+        return (
+            False,
+            "OTP service is temporarily unavailable. Please try again later or contact support.",
+        )
+
+    region_code = get_phonenumber_region_code(phone_number)
+    if OTP_ALLOWED_COUNTRIES and region_code not in OTP_ALLOWED_COUNTRIES:
+        logger.info("OTP not allowed for country: %s", region_code)
+        return (
+            False,
+            "OTP service is not available for your region. Please contact support for assistance.",
+        )
+
     if not OTPRateLimit.get_or_none(OTPRateLimit.phone_number == phone_number):
         return (
             False,
             "OTP not initiated. Please request a new OTP before attempting to verify.",
         )
-
-    region_code = get_phonenumber_region_code(phone_number)
 
     if MOCK_OTP:
         success, message = mock_verify_otp(otp)

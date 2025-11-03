@@ -97,7 +97,7 @@ def get_signup_users(filters=None, group_by=None, options=None):
         query = query.where(Signups.date_created <= end_date_dt)
 
     if country_code:
-        query = query.where(Signups.country_code == country_code)
+        query = query.where(fn.LOWER(Signups.country_code) == country_code.lower())
 
     total_signup_users = query.select(fn.COUNT(Signups.id)).scalar()
     total_countries = query.select(fn.COUNT(fn.DISTINCT(Signups.country_code))).scalar()
@@ -212,6 +212,23 @@ def get_retained_users(filters=None, group_by=None, options=None):
             - total_countries (int): Total number of unique countries.
             - countries (list): List of unique countries involved in the result.
     """
+
+    def decrypt_and_filter_generator(query, country_code, batch_size):
+        batch_number = 1
+        while True:
+            batch_query = query.paginate(batch_number, batch_size)
+            batch_results = list(batch_query)
+            if not batch_results:
+                break
+            for row in batch_results:
+                decrypted_code = decrypt_and_decode(row.country_code)
+                if (
+                    country_code is None
+                    or decrypted_code.lower() == country_code.lower()
+                ):
+                    yield row, decrypted_code
+            batch_number += 1
+
     filters = filters or {}
     options = options or {}
 
@@ -264,40 +281,42 @@ def get_retained_users(filters=None, group_by=None, options=None):
     if end_date_dt:
         query = query.where(Entity.date_created <= end_date_dt)
 
-    total_retained_users_with_tokens = (
-        query.select(fn.COUNT(fn.DISTINCT(Entity.eid))).join(Token).scalar()
-    )
+    if country_code:
+        total_retained_users_with_tokens = 0
+        tokens_query = query.join(Token)
+        tokens_generator = decrypt_and_filter_generator(
+            tokens_query, country_code, batch_size
+        )
+        unique_eids_with_tokens = set()
 
-    def decrypt_and_filter_generator(query, country_code, batch_size):
-        batch_number = 1
-        while True:
-            batch_query = query.paginate(batch_number, batch_size)
-            batch_results = list(batch_query)
-            if not batch_results:
-                break
-            for row in batch_results:
-                decrypted_code = decrypt_and_decode(row.country_code)
-                if country_code is None or decrypted_code == country_code:
-                    yield row, decrypted_code
-            batch_number += 1
+        for entity, _ in tokens_generator:
+            unique_eids_with_tokens.add(entity.eid)
+
+        total_retained_users_with_tokens = len(unique_eids_with_tokens)
+    else:
+        total_retained_users_with_tokens = (
+            query.select(fn.COUNT(fn.DISTINCT(Entity.eid))).join(Token).scalar()
+        )
 
     decrypted_rows = decrypt_and_filter_generator(query, country_code, batch_size)
 
-    total_retained_users = 0
+    filtered_entities = []
     unique_countries = set()
-    country_aggregates = defaultdict(int)
 
-    for _, decrypted_country in decrypted_rows:
-        total_retained_users += 1
+    for entity, decrypted_country in decrypted_rows:
+        filtered_entities.append((entity, decrypted_country))
         unique_countries.add(decrypted_country)
-        if group_by == "country":
-            country_aggregates[decrypted_country] += 1
 
+    total_retained_users = len(filtered_entities)
     total_countries = len(unique_countries)
     result = []
     total_records = 0
 
     if group_by == "country":
+        country_aggregates = defaultdict(int)
+        for _, decrypted_country in filtered_entities:
+            country_aggregates[decrypted_country] += 1
+
         result = sorted(
             [
                 {"country_code": k, "retained_users": v}
@@ -315,22 +334,53 @@ def get_retained_users(filters=None, group_by=None, options=None):
             result = result[start_idx:end_idx]
 
     elif group_by == "date":
-        timeframe = Entity.date_created.truncate(granularity).alias("timeframe")
-        query = (
-            query.select(timeframe, fn.COUNT(Entity.eid).alias("retained_users"))
-            .group_by(timeframe)
-            .order_by(timeframe.desc())
-        )
+        if country_code:
+            date_aggregates = defaultdict(int)
 
-        total_records = query.count()
-        query = query.limit(top) if top else query.paginate(page, page_size)
-        result = [
-            {
-                "timeframe": str(row.timeframe.date()),
-                "retained_users": row.retained_users,
-            }
-            for row in query
-        ]
+            for entity, _ in filtered_entities:
+                if granularity == "day":
+                    timeframe_key = entity.date_created.date()
+                else:
+                    timeframe_key = entity.date_created.replace(day=1).date()
+                date_aggregates[timeframe_key] += 1
+
+            result = sorted(
+                [
+                    {
+                        "timeframe": str(date_key),
+                        "retained_users": count,
+                    }
+                    for date_key, count in date_aggregates.items()
+                ],
+                key=lambda x: x["timeframe"],
+                reverse=True,
+            )
+            total_records = len(result)
+            if top:
+                result = result[:top]
+            else:
+                start_idx = (page - 1) * page_size
+                end_idx = start_idx + page_size
+                result = result[start_idx:end_idx]
+        else:
+            timeframe = Entity.date_created.truncate(granularity).alias("timeframe")
+            date_query = (
+                query.select(timeframe, fn.COUNT(Entity.eid).alias("retained_users"))
+                .group_by(timeframe)
+                .order_by(timeframe.desc())
+            )
+
+            total_records = date_query.count()
+            date_query = (
+                date_query.limit(top) if top else date_query.paginate(page, page_size)
+            )
+            result = [
+                {
+                    "timeframe": str(row.timeframe.date()),
+                    "retained_users": row.retained_users,
+                }
+                for row in date_query
+            ]
 
     elif group_by is None:
         result = []
