@@ -204,18 +204,18 @@ def set_configs(config_name, config_value) -> None:
         raise
 
 
-def generate_eid(phone_number_hash, namespace=uuid.NAMESPACE_DNS):
+def generate_eid(identifier_hash, namespace=uuid.NAMESPACE_DNS):
     """
-    Generate a UUID based on a phone number hash using UUID5.
+    Generate a UUID based on an identifier hash using UUID5.
 
     Parameters:
-    - phone_number_hash (str): The hash of the phone number.
+    - identifier_hash (str): The hash of the identifier (phone number or email).
     - namespace (uuid.UUID): The namespace identifier. Defaults to uuid.NAMESPACE_DNS.
 
     Returns:
     - str: The hexadecimal representation of the generated UUID.
     """
-    return uuid.uuid5(namespace, phone_number_hash).hex
+    return uuid.uuid5(namespace, identifier_hash).hex
 
 
 def generate_keypair_and_public_key(eid, keystore_name):
