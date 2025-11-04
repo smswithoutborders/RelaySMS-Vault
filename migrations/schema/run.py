@@ -48,6 +48,8 @@ ACTIONS = {
     "rename_table": migrator.rename_table,
     "add_index": migrator.add_index,
     "drop_index": migrator.drop_index,
+    "add_foreign_key_constraint": migrator.add_foreign_key_constraint,
+    "drop_foreign_key_constraint": migrator.drop_foreign_key_constraint,
 }
 
 
