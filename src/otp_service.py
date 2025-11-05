@@ -6,7 +6,6 @@ from enum import Enum
 from typing import Tuple, Optional
 import datetime
 import random
-import re
 import requests
 
 from twilio.rest import Client
@@ -29,17 +28,35 @@ TWILIO_PHONE_NUMBER = get_configs("TWILIO_PHONE_NUMBER")
 
 EMAIL_SERVICE_URL = get_configs("EMAIL_SERVICE_URL")
 EMAIL_SERVICE_API_KEY = get_configs("EMAIL_SERVICE_API_KEY")
-EMAIL_FROM_ADDRESS = get_configs(
-    "EMAIL_FROM_ADDRESS", default_value="noreply@relaysms.com"
+EMAIL_ALIAS_DOMAIN = get_configs("EMAIL_ALIAS_DOMAIN")
+EMAIL_SENDER_MAILBOX = get_configs("EMAIL_SENDER_MAILBOX")
+EMAIL_LOGO_URL = get_configs("EMAIL_LOGO_URL")
+EMAIL_SUBJECT = get_configs(
+    "EMAIL_SUBJECT", default_value="{{ project_name }} Verification Code"
 )
-EMAIL_FROM_NAME = get_configs("EMAIL_FROM_NAME", default_value="RelaySMS")
+EMAIL_ORGANIZATION_NAME = get_configs(
+    "EMAIL_ORGANIZATION_NAME", default_value="SMSWithoutBorders"
+)
+EMAIL_WEBSITE_URL = get_configs(
+    "EMAIL_WEBSITE_URL", default_value="https://relay.smswithoutborders.com"
+)
+EMAIL_PROJECT_NAME = get_configs("EMAIL_PROJECT_NAME", default_value="RelaySMS")
+EMAIL_ABUSE_EMAIL = get_configs(
+    "EMAIL_ABUSE_EMAIL", default_value="abuse@smswithoutborders.com"
+)
+EMAIL_SUPPORT_EMAIL = get_configs(
+    "EMAIL_SUPPORT_EMAIL", default_value="support@smswithoutborders.com"
+)
+EMAIL_ALIAS_PREFIX = get_configs("EMAIL_ALIAS_PREFIX", default_value="noreply")
+EMAIL_OTP_EXPIRY_MINUTES = int(
+    get_configs("EMAIL_OTP_EXPIRY_MINUTES", default_value="10")
+)
 
 MOCK_OTP = get_configs("MOCK_OTP")
 MOCK_OTP = MOCK_OTP.lower() == "true" if MOCK_OTP is not None else False
 DUMMY_PHONENUMBERS = get_configs(
     "DUMMY_PHONENUMBER", default_value="+237123456789"
 ).split(",")
-DUMMY_EMAILS = get_configs("DUMMY_EMAIL", default_value="test@example.com").split(",")
 
 OTP_ENABLED = get_configs("OTP_ENABLED", default_value="true")
 OTP_ENABLED = OTP_ENABLED.lower() == "true" if OTP_ENABLED is not None else True
@@ -91,7 +108,7 @@ class OTPDeliveryMethod(ABC):
 
     @abstractmethod
     def send(
-        self, identifier: str, otp_code: str, message_body: Optional[str] = None
+        self, identifier: str, message_body: Optional[str] = None
     ) -> Tuple[bool, str]:
         """Send OTP to identifier."""
 
@@ -104,16 +121,27 @@ class SMSDeliveryMethod(OTPDeliveryMethod):
     """SMS OTP delivery via Twilio and Queuedroid."""
 
     def send(
-        self, identifier: str, otp_code: str, message_body: Optional[str] = None
+        self, identifier: str, message_body: Optional[str] = None
     ) -> Tuple[bool, str]:
         """Send OTP via SMS."""
         logger.debug("Sending SMS OTP")
 
-        if identifier in DUMMY_PHONENUMBERS:
+        if OTP_ALLOWED_COUNTRIES:
+            region_code = get_phonenumber_region_code(identifier)
+            if region_code not in OTP_ALLOWED_COUNTRIES:
+                logger.info("OTP blocked for region: %s", region_code)
+                return (
+                    False,
+                    "OTP service unavailable for your region. Contact support.",
+                )
+
+        if MOCK_OTP or identifier in DUMMY_PHONENUMBERS:
             return MockOTPHandler.send()
 
         region_code = get_phonenumber_region_code(identifier)
         if region_code in QUEUEDROID_SUPPORTED_VERIFICATION_REGION_CODES:
+            _, otp_result = create_inapp_otp(identifier, ContactType.PHONE)
+            otp_code, _ = otp_result
             return self._send_with_queuedroid(identifier, otp_code)
         return self._send_with_twilio(identifier, message_body)
 
@@ -121,16 +149,21 @@ class SMSDeliveryMethod(OTPDeliveryMethod):
         """Verify OTP via SMS."""
         logger.debug("Verifying SMS OTP")
 
-        if identifier in DUMMY_PHONENUMBERS:
+        if OTP_ALLOWED_COUNTRIES:
+            region_code = get_phonenumber_region_code(identifier)
+            if region_code not in OTP_ALLOWED_COUNTRIES:
+                logger.info("OTP blocked for region: %s", region_code)
+                return (
+                    False,
+                    "OTP service unavailable for your region. Contact support.",
+                )
+
+        if MOCK_OTP or identifier in DUMMY_PHONENUMBERS:
             return MockOTPHandler.verify(otp_code)
 
         region_code = get_phonenumber_region_code(identifier)
         if region_code in QUEUEDROID_SUPPORTED_VERIFICATION_REGION_CODES:
             return verify_inapp_otp(identifier, otp_code, ContactType.PHONE)
-        return self._verify_with_twilio(identifier, otp_code)
-
-    def verify_with_twilio(self, identifier: str, otp_code: str) -> Tuple[bool, str]:
-        """Public method for Twilio verification."""
         return self._verify_with_twilio(identifier, otp_code)
 
     def _send_with_queuedroid(
@@ -212,20 +245,26 @@ class EmailDeliveryMethod(OTPDeliveryMethod):
     """Email OTP delivery via HTTP email service."""
 
     def send(
-        self, identifier: str, otp_code: str, message_body: Optional[str] = None
+        self, identifier: str, message_body: Optional[str] = None
     ) -> Tuple[bool, str]:
         """Send OTP via email."""
         logger.debug("Sending email OTP")
 
-        if identifier in DUMMY_EMAILS:
+        if MOCK_OTP:
             return MockOTPHandler.send()
+
+        _, otp_result = create_inapp_otp(
+            identifier, ContactType.EMAIL, EMAIL_OTP_EXPIRY_MINUTES
+        )
+        otp_code, _ = otp_result
+
         return self._send_with_email_service(identifier, otp_code, message_body)
 
     def verify(self, identifier: str, otp_code: str) -> Tuple[bool, str]:
         """Verify OTP via email."""
         logger.debug("Verifying email OTP")
 
-        if identifier in DUMMY_EMAILS:
+        if MOCK_OTP:
             return MockOTPHandler.verify(otp_code)
         return verify_inapp_otp(identifier, otp_code, ContactType.EMAIL)
 
@@ -238,27 +277,39 @@ class EmailDeliveryMethod(OTPDeliveryMethod):
             return False, "Email service unavailable. Contact support."
 
         try:
-            body = (
-                message_body
-                or f"""Hello,
-
-Your RelaySMS verification code is: {otp_code}
-
-This code expires in 10 minutes. Do not share this code.
-
-If you didn't request this, please ignore this email.
-
-Best regards,
-The RelaySMS Team"""
+            expiration_time = datetime.datetime.now() + datetime.timedelta(
+                minutes=EMAIL_OTP_EXPIRY_MINUTES
             )
 
+            expiration_date_time = expiration_time.strftime("%B %d, %Y at %I:%M %p %Z")
+            if not expiration_date_time.endswith(" "):
+                expiration_date_time = expiration_time.strftime(
+                    "%B %d, %Y at %I:%M %p UTC"
+                )
+
+            if EMAIL_OTP_EXPIRY_MINUTES == 1:
+                expiration_time_words = "1 minute"
+            else:
+                expiration_time_words = f"{EMAIL_OTP_EXPIRY_MINUTES} minutes"
+
             payload = {
-                "to": email_address,
-                "from": EMAIL_FROM_ADDRESS,
-                "from_name": EMAIL_FROM_NAME,
-                "subject": "Your RelaySMS Verification Code",
-                "body": body,
-                "content_type": "text/plain",
+                "to_email": email_address,
+                "subject": EMAIL_SUBJECT,
+                "template": "otp",
+                "substitutions": {
+                    "organization_name": EMAIL_ORGANIZATION_NAME,
+                    "website_url": EMAIL_WEBSITE_URL,
+                    "logo_url": EMAIL_LOGO_URL,
+                    "project_name": EMAIL_PROJECT_NAME,
+                    "expiration_time": expiration_time_words,
+                    "otp_code": otp_code,
+                    "expiration_date_time": expiration_date_time,
+                    "abuse_email": EMAIL_ABUSE_EMAIL,
+                    "support_email": EMAIL_SUPPORT_EMAIL,
+                },
+                "alias_prefix": EMAIL_ALIAS_PREFIX,
+                "alias_domain": EMAIL_ALIAS_DOMAIN,
+                "sender_mailbox": EMAIL_SENDER_MAILBOX,
             }
 
             headers = {
@@ -269,10 +320,21 @@ The RelaySMS Team"""
             response = requests.post(
                 EMAIL_SERVICE_URL, json=payload, headers=headers, timeout=30
             )
+            response.raise_for_status()
+            response_data = response.json()
 
             if response.status_code == 200:
-                logger.info("OTP sent via email")
-                return True, "OTP sent. Check your email."
+                if response_data.get("success"):
+                    logger.info(
+                        "OTP sent via email: %s", response_data.get("message", "")
+                    )
+                    return True, "OTP sent. Check your email."
+
+                logger.error(
+                    "Email service returned error: %s",
+                    response_data.get("message", ""),
+                )
+                return False, "Failed to send OTP via email. Try again."
 
             logger.error(
                 "Email service error %d: %s", response.status_code, response.text
@@ -290,39 +352,6 @@ class OTPService:
     def __init__(self):
         self.sms_delivery = SMSDeliveryMethod()
         self.email_delivery = EmailDeliveryMethod()
-
-    def validate_identifier(
-        self, identifier: str, contact_type: ContactType
-    ) -> Tuple[bool, str]:
-        """Validate identifier format."""
-        if contact_type == ContactType.EMAIL:
-            email_pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
-            if not re.match(email_pattern, identifier):
-                return False, "Invalid email address format."
-        elif contact_type == ContactType.PHONE:
-            if (
-                not identifier.startswith("+")
-                or not identifier[1:].replace(" ", "").replace("-", "").isdigit()
-            ):
-                return (
-                    False,
-                    "Invalid phone number format. Use international format (e.g., +1234567890).",
-                )
-        return True, ""
-
-    def check_region_restrictions(
-        self, identifier: str, contact_type: ContactType
-    ) -> Tuple[bool, str]:
-        """Check region restrictions for phone numbers."""
-        if contact_type == ContactType.PHONE and OTP_ALLOWED_COUNTRIES:
-            region_code = get_phonenumber_region_code(identifier)
-            if region_code not in OTP_ALLOWED_COUNTRIES:
-                logger.info("OTP blocked for region: %s", region_code)
-                return (
-                    False,
-                    "OTP service unavailable for your region. Contact support.",
-                )
-        return True, ""
 
 
 def get_rate_limit_key(identifier: str, contact_type: ContactType) -> dict:
@@ -374,37 +403,16 @@ def send_otp(
         logger.info("OTP service disabled")
         return False, "OTP service temporarily unavailable. Contact support.", None
 
-    service = OTPService()
-
-    is_valid, validation_message = service.validate_identifier(identifier, contact_type)
-    if not is_valid:
-        return False, validation_message, None
-
-    is_allowed, restriction_message = service.check_region_restrictions(
-        identifier, contact_type
-    )
-    if not is_allowed:
-        return False, restriction_message, None
-
     if is_rate_limited(identifier, contact_type):
         return False, "Too many OTP requests. Wait and try again.", None
 
+    service = OTPService()
     expires = None
 
-    if MOCK_OTP:
-        success, message = MockOTPHandler.send()
+    if contact_type == ContactType.EMAIL:
+        success, message = service.email_delivery.send(identifier, message_body)
     else:
-        _, otp_result = create_inapp_otp(identifier, contact_type)
-        otp_code, _ = otp_result
-
-        if contact_type == ContactType.EMAIL:
-            success, message = service.email_delivery.send(
-                identifier, otp_code, message_body
-            )
-        else:
-            success, message = service.sms_delivery.send(
-                identifier, otp_code, message_body
-            )
+        success, message = service.sms_delivery.send(identifier, message_body)
 
     if success:
         otp_record = increment_rate_limit(identifier, contact_type)
@@ -417,7 +425,6 @@ def verify_otp(
     identifier: str,
     otp_code: str,
     contact_type: ContactType = ContactType.PHONE,
-    use_twilio: bool = True,
 ) -> Tuple[bool, str]:
     """Verify OTP for identifier."""
     logger.debug("Verifying OTP")
@@ -426,37 +433,16 @@ def verify_otp(
         logger.info("OTP service disabled")
         return False, "OTP service temporarily unavailable. Contact support."
 
-    service = OTPService()
-
     rate_limit_filter = get_rate_limit_key(identifier, contact_type)
     if not OTPRateLimit.get_or_none(**rate_limit_filter):
         return False, "OTP not initiated. Request a new OTP first."
 
-    if contact_type == ContactType.PHONE:
-        is_allowed, restriction_message = service.check_region_restrictions(
-            identifier, contact_type
-        )
-        if not is_allowed:
-            return False, restriction_message
+    service = OTPService()
 
-    if MOCK_OTP:
-        success, message = MockOTPHandler.verify(otp_code)
+    if contact_type == ContactType.EMAIL:
+        success, message = service.email_delivery.verify(identifier, otp_code)
     else:
-        if contact_type == ContactType.EMAIL:
-            success, message = service.email_delivery.verify(identifier, otp_code)
-        else:
-            if use_twilio and identifier not in DUMMY_PHONENUMBERS:
-                region_code = get_phonenumber_region_code(identifier)
-                if region_code not in QUEUEDROID_SUPPORTED_VERIFICATION_REGION_CODES:
-                    success, message = service.sms_delivery.verify_with_twilio(
-                        identifier, otp_code
-                    )
-                else:
-                    success, message = verify_inapp_otp(
-                        identifier, otp_code, ContactType.PHONE
-                    )
-            else:
-                success, message = service.sms_delivery.verify(identifier, otp_code)
+        success, message = service.sms_delivery.verify(identifier, otp_code)
 
     if success:
         clear_rate_limit(identifier, contact_type)
@@ -553,7 +539,7 @@ def generate_otp(length: int = 6) -> str:
 
 
 def create_inapp_otp(
-    identifier: str, contact_type: ContactType, exp_time: int = 10
+    identifier: str, contact_type: ContactType = ContactType.PHONE, exp_time: int = 10
 ) -> Tuple[str, Tuple[str, int]]:
     """Create or update OTP for identifier."""
     otp_filter = {}

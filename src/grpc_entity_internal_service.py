@@ -825,7 +825,6 @@ class EntityInternalService(vault_pb2_grpc.EntityInternalServicer):
             success, message = verify_otp(
                 request.phone_number,
                 request.ownership_proof_response,
-                use_twilio=False,
             )
             if not success:
                 return self.handle_create_grpc_error_response(
@@ -883,7 +882,7 @@ class EntityInternalService(vault_pb2_grpc.EntityInternalServicer):
             if MOCK_OTP:
                 otp_code = "123456"
             else:
-                _, otp_result = create_inapp_otp(phone_number=request.phone_number)
+                _, otp_result = create_inapp_otp(request.phone_number)
                 otp_code, _ = otp_result
 
             logger.debug(
