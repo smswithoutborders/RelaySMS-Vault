@@ -328,9 +328,9 @@ class EntityService(vault_pb2_grpc.EntityServicer):
         """Gets the request identifier."""
         phone_number = getattr(request, "phone_number", None)
         email_address = getattr(request, "email_address", None)
-        if phone_number:
-            return ContactType.PHONE, phone_number
-        return ContactType.EMAIL, email_address
+        if email_address:
+            return ContactType.EMAIL, email_address
+        return ContactType.PHONE, phone_number
 
     def CreateEntity(self, request, context):
         """Handles the creation of an entity."""
@@ -466,14 +466,14 @@ class EntityService(vault_pb2_grpc.EntityServicer):
                 return invalid_fields_response
 
             identifier_type, identifier_value = self.get_identifier(request)
-            if identifier_type == ContactType.PHONE:
-                phone_number = identifier_value
-                phone_number_hash = generate_hmac(HASHING_KEY, phone_number)
-                entity_obj = find_entity(phone_number_hash=phone_number_hash)
-            else:
+            if identifier_type == ContactType.EMAIL:
                 email_address = identifier_value
                 email_address_hash = generate_hmac(HASHING_KEY, email_address)
                 entity_obj = find_entity(email_hash=email_address_hash)
+            else:
+                phone_number = identifier_value
+                phone_number_hash = generate_hmac(HASHING_KEY, phone_number)
+                entity_obj = find_entity(phone_number_hash=phone_number_hash)
 
             if entity_obj:
                 return self.handle_create_grpc_error_response(
@@ -638,14 +638,14 @@ class EntityService(vault_pb2_grpc.EntityServicer):
                 return invalid_fields_response
 
             identifier_type, identifier_value = self.get_identifier(request)
-            if identifier_type == ContactType.PHONE:
-                phone_number = identifier_value
-                phone_number_hash = generate_hmac(HASHING_KEY, phone_number)
-                entity_obj = find_entity(phone_number_hash=phone_number_hash)
-            else:
+            if identifier_type == ContactType.EMAIL:
                 email_address = identifier_value
                 email_address_hash = generate_hmac(HASHING_KEY, email_address)
                 entity_obj = find_entity(email_hash=email_address_hash)
+            else:
+                phone_number = identifier_value
+                phone_number_hash = generate_hmac(HASHING_KEY, phone_number)
+                entity_obj = find_entity(phone_number_hash=phone_number_hash)
 
             if not entity_obj:
                 return self.handle_create_grpc_error_response(
@@ -963,14 +963,14 @@ class EntityService(vault_pb2_grpc.EntityServicer):
                 return invalid_fields_response
 
             identifier_type, identifier_value = self.get_identifier(request)
-            if identifier_type == ContactType.PHONE:
-                phone_number = identifier_value
-                phone_number_hash = generate_hmac(HASHING_KEY, phone_number)
-                entity_obj = find_entity(phone_number_hash=phone_number_hash)
-            else:
+            if identifier_type == ContactType.EMAIL:
                 email_address = identifier_value
                 email_address_hash = generate_hmac(HASHING_KEY, email_address)
                 entity_obj = find_entity(email_hash=email_address_hash)
+            else:
+                phone_number = identifier_value
+                phone_number_hash = generate_hmac(HASHING_KEY, phone_number)
+                entity_obj = find_entity(phone_number_hash=phone_number_hash)
 
             if not entity_obj:
                 return self.handle_create_grpc_error_response(
