@@ -28,7 +28,8 @@ class Entity(Model):
     """Model representing Entities Table."""
 
     eid = UUIDField(primary_key=True)
-    phone_number_hash = CharField()
+    phone_number_hash = CharField(null=True)
+    email_hash = CharField(null=True)
     password_hash = CharField(null=True)
     country_code = CharField()
     device_id = CharField(null=True)
@@ -49,13 +50,15 @@ class Entity(Model):
         indexes = (
             (("phone_number_hash",), True),
             (("device_id",), True),
+            (("email_hash",), True),
         )
 
 
 class OTPRateLimit(Model):
     """Model representing OTP Rate Limits Table."""
 
-    phone_number = CharField()
+    phone_number = CharField(null=True)
+    email = CharField(null=True)
     attempt_count = IntegerField(default=0)
     date_expires = DateTimeField(null=True)
     date_created = DateTimeField(default=datetime.datetime.now)
@@ -65,7 +68,10 @@ class OTPRateLimit(Model):
 
         database = database
         table_name = "otp_rate_limit"
-        indexes = ((("phone_number",), True),)
+        indexes = (
+            (("phone_number",), True),
+            (("email",), True),
+        )
 
 
 class Token(Model):
@@ -106,7 +112,8 @@ class PasswordRateLimit(Model):
 class OTP(Model):
     """Model representing OTP Table."""
 
-    phone_number = CharField()
+    phone_number = CharField(null=True)
+    email = CharField(null=True)
     otp_code = CharField(max_length=10)
     attempt_count = IntegerField(default=0)
     date_expires = DateTimeField()
@@ -120,6 +127,7 @@ class OTP(Model):
         table_name = "otp"
         indexes = (
             (("phone_number",), False),
+            (("email",), False),
             (("date_expires",), False),
         )
 

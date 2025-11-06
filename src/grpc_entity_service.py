@@ -1,8 +1,5 @@
-"""
-This program is free software: you can redistribute it under the terms
-of the GNU General Public License, v. 3.0. If a copy of the GNU General
-Public License was not distributed with this file, see <https://www.gnu.org/licenses/>.
-"""
+# SPDX-License-Identifier: GPL-3.0-only
+"""gRPC Entity Service"""
 
 import base64
 import re
@@ -21,7 +18,7 @@ from src import signups
 from src.entity import create_entity, find_entity
 from src.tokens import fetch_entity_tokens, update_entity_tokens
 from src.crypto import generate_hmac, verify_hmac
-from src.otp_service import send_otp, verify_otp
+from src.otp_service import send_otp, verify_otp, ContactType
 from src.recaptcha import is_captcha_enabled, verify_captcha
 from src.utils import (
     load_key,
@@ -60,10 +57,7 @@ class EntityService(vault_pb2_grpc.EntityServicer):
 
     @classmethod
     def _get_entity_lock(cls, identifier: str) -> threading.Lock:
-        """
-        Get or create a lock for a specific entity.
-        Locks are automatically removed when no longer used.
-        """
+        """Get or create a lock for a specific entity."""
         with cls._locks_lock:
             lock = cls._entity_locks.get(identifier)
             if lock is None:
@@ -75,27 +69,7 @@ class EntityService(vault_pb2_grpc.EntityServicer):
     def handle_create_grpc_error_response(
         self, context, response, error, status_code, **kwargs
     ):
-        """
-        Handles the creation of a gRPC error response.
-
-        Args:
-            context (grpc.ServicerContext): The gRPC context object.
-            response (callable): The gRPC response object.
-            error (Exception or str): The exception instance or error message.
-            status_code (grpc.StatusCode): The gRPC status code to be set for the response
-                (e.g., grpc.StatusCode.INTERNAL).
-            user_msg (str, optional): A user-friendly error message to be returned to the client.
-                If not provided, the `error` message will be used.
-            error_type (str, optional): A string identifying the type of error.
-                When set to "UNKNOWN", it triggers the logging of a full exception traceback
-                for debugging purposes.
-            error_prefix (str, optional): An optional prefix to prepend to the error message
-                for additional context (e.g., indicating the specific operation or subsystem
-                that caused the error).
-
-        Returns:
-            An instance of the specified response with the error set.
-        """
+        """Handles the creation of a gRPC error response."""
         user_msg = kwargs.get("user_msg")
         error_type = kwargs.get("error_type")
         error_prefix = kwargs.get("error_prefix")
@@ -115,19 +89,7 @@ class EntityService(vault_pb2_grpc.EntityServicer):
     def handle_request_field_validation(
         self, context, request, response, required_fields
     ):
-        """
-        Validates the fields in the gRPC request.
-
-        Args:
-            context: gRPC context.
-            request: gRPC request object.
-            response: gRPC response object.
-            required_fields (list): List of required fields, can include tuples.
-
-        Returns:
-            None or response: None if no missing fields,
-                error response otherwise.
-        """
+        """Validates the fields in the gRPC request."""
         x25519_fields = {"client_publish_pub_key", "client_device_id_pub_key"}
 
         def field_missing_error(field_names):
@@ -178,6 +140,19 @@ class EntityService(vault_pb2_grpc.EntityServicer):
                     )
             return None
 
+        def validate_email_address():
+            email_address = getattr(request, "email_address", None)
+            if email_address:
+                email_pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
+                if not re.match(email_pattern, email_address):
+                    return self.handle_create_grpc_error_response(
+                        context,
+                        response,
+                        "Invalid email address format.",
+                        grpc.StatusCode.INVALID_ARGUMENT,
+                    )
+            return None
+
         def validate_x25519_keys():
             for field in x25519_fields & set(required_fields):
                 is_valid, error = is_valid_x25519_public_key(getattr(request, field))
@@ -199,6 +174,10 @@ class EntityService(vault_pb2_grpc.EntityServicer):
         if phone_number_error:
             return phone_number_error
 
+        email_address_error = validate_email_address()
+        if email_address_error:
+            return email_address_error
+
         x25519_keys_error = validate_x25519_keys()
         if x25519_keys_error:
             return x25519_keys_error
@@ -206,19 +185,10 @@ class EntityService(vault_pb2_grpc.EntityServicer):
         return None
 
     def handle_pow_verification(self, context, request, response):
-        """
-        Handle proof of ownership verification.
-
-        Args:
-            context: gRPC context.
-            request: gRPC request object.
-            response: gRPC response object.
-
-        Returns:
-            tuple: Tuple containing success flag and message.
-        """
+        """Handle proof of ownership verification."""
+        identifier_type, identifier_value = self.get_identifier(request)
         success, message = verify_otp(
-            request.phone_number, request.ownership_proof_response
+            identifier_value, request.ownership_proof_response, identifier_type
         )
         if not success:
             return success, self.handle_create_grpc_error_response(
@@ -230,22 +200,9 @@ class EntityService(vault_pb2_grpc.EntityServicer):
         return success, message
 
     def handle_pow_initialization(self, context, request, response):
-        """
-        Handle proof of ownership initialization.
-
-        Args:
-            context: gRPC context.
-            request: gRPC request object.
-            response: gRPC response object.
-
-        Returns:
-            tuple:
-                - success flag (bool)
-                - tuple or response:
-                    - message.
-                    - expiration time.
-        """
-        success, message, expires = send_otp(request.phone_number)
+        """Handle proof of ownership initialization."""
+        identifier_type, identifier_value = self.get_identifier(request)
+        success, message, expires = send_otp(identifier_value, identifier_type)
         if not success:
             return success, self.handle_create_grpc_error_response(
                 context,
@@ -277,17 +234,7 @@ class EntityService(vault_pb2_grpc.EntityServicer):
         return True, None
 
     def handle_long_lived_token_validation(self, request, context, response):
-        """
-        Handles the validation of a long-lived token from the request.
-
-        Args:
-            context: gRPC context.
-            request: gRPC request object.
-            response: gRPC response object.
-
-        Returns:
-            tuple: Tuple containing entity object, and error response.
-        """
+        """Handles the validation of a long-lived token from the request."""
 
         def create_error_response(error_msg):
             return self.handle_create_grpc_error_response(
@@ -377,6 +324,14 @@ class EntityService(vault_pb2_grpc.EntityServicer):
         """Cleans up the phone number by removing spaces."""
         return re.sub(r"\s+", "", phone_number)
 
+    def get_identifier(self, request):
+        """Gets the request identifier."""
+        phone_number = getattr(request, "phone_number", None)
+        email_address = getattr(request, "email_address", None)
+        if email_address:
+            return ContactType.EMAIL, email_address
+        return ContactType.PHONE, phone_number
+
     def CreateEntity(self, request, context):
         """Handles the creation of an entity."""
 
@@ -392,8 +347,9 @@ class EntityService(vault_pb2_grpc.EntityServicer):
             if not success:
                 return pow_response
 
-            phone_number_hash = generate_hmac(HASHING_KEY, request.phone_number)
-            eid = generate_eid(phone_number_hash)
+            identifier_type, identifier_value = self.get_identifier(request)
+            identifier_hash = generate_hmac(HASHING_KEY, identifier_value)
+            eid = generate_eid(identifier_hash)
             password_hash = generate_hmac(HASHING_KEY, request.password)
             country_code_ciphertext_b64 = encrypt_and_encode(request.country_code)
 
@@ -413,12 +369,11 @@ class EntityService(vault_pb2_grpc.EntityServicer):
 
             fields = {
                 "eid": eid,
-                "phone_number_hash": phone_number_hash,
                 "password_hash": password_hash,
                 "country_code": country_code_ciphertext_b64,
                 "device_id": compute_device_id(
                     device_id_shared_key,
-                    request.phone_number,
+                    identifier_value,
                     base64.b64decode(request.client_device_id_pub_key),
                 ),
                 "client_publish_pub_key": request.client_publish_pub_key,
@@ -426,6 +381,10 @@ class EntityService(vault_pb2_grpc.EntityServicer):
                 "publish_keypair": entity_publish_keypair.serialize(),
                 "device_id_keypair": entity_device_id_keypair.serialize(),
             }
+            if identifier_type == ContactType.EMAIL:
+                fields["email_hash"] = identifier_hash
+            if identifier_type == ContactType.PHONE:
+                fields["phone_number_hash"] = identifier_hash
 
             create_entity(**fields)
 
@@ -452,7 +411,8 @@ class EntityService(vault_pb2_grpc.EntityServicer):
                 if not captcha_success:
                     return captcha_error
 
-            entity_lock = self._get_entity_lock(request.phone_number)
+            _, identifier_value = self.get_identifier(request)
+            entity_lock = self._get_entity_lock(identifier_value)
             with entity_lock:
                 success, pow_response = self.handle_pow_initialization(
                     context, request, response
@@ -479,7 +439,7 @@ class EntityService(vault_pb2_grpc.EntityServicer):
                 request,
                 response,
                 [
-                    "phone_number",
+                    ("phone_number", "email_address"),
                     "country_code",
                     "password",
                     "client_publish_pub_key",
@@ -505,14 +465,21 @@ class EntityService(vault_pb2_grpc.EntityServicer):
             if invalid_fields_response:
                 return invalid_fields_response
 
-            phone_number_hash = generate_hmac(HASHING_KEY, request.phone_number)
-            entity_obj = find_entity(phone_number_hash=phone_number_hash)
+            identifier_type, identifier_value = self.get_identifier(request)
+            if identifier_type == ContactType.EMAIL:
+                email_address = identifier_value
+                email_address_hash = generate_hmac(HASHING_KEY, email_address)
+                entity_obj = find_entity(email_hash=email_address_hash)
+            else:
+                phone_number = identifier_value
+                phone_number_hash = generate_hmac(HASHING_KEY, phone_number)
+                entity_obj = find_entity(phone_number_hash=phone_number_hash)
 
             if entity_obj:
                 return self.handle_create_grpc_error_response(
                     context,
                     response,
-                    "Entity with this phone number already exists.",
+                    f"Entity with this {identifier_type.value} already exists.",
                     grpc.StatusCode.ALREADY_EXISTS,
                 )
 
@@ -578,7 +545,8 @@ class EntityService(vault_pb2_grpc.EntityServicer):
                 if not captcha_success:
                     return captcha_error
 
-            entity_lock = self._get_entity_lock(request.phone_number)
+            _, identifier_value = self.get_identifier(request)
+            entity_lock = self._get_entity_lock(identifier_value)
             with entity_lock:
                 success, pow_response = self.handle_pow_initialization(
                     context, request, response
@@ -589,7 +557,7 @@ class EntityService(vault_pb2_grpc.EntityServicer):
                 message, expires = pow_response
                 entity_obj.device_id = None
                 entity_obj.server_state = None
-                entity_obj.save()
+                entity_obj.save(only=["device_id", "server_state"])
 
                 return response(
                     requires_ownership_proof=True,
@@ -620,16 +588,25 @@ class EntityService(vault_pb2_grpc.EntityServicer):
 
             long_lived_token = generate_llt(eid, device_id_shared_key)
 
+            _, identifier_value = self.get_identifier(request)
             entity_obj.device_id = compute_device_id(
                 device_id_shared_key,
-                request.phone_number,
+                identifier_value,
                 base64.b64decode(request.client_device_id_pub_key),
             )
             entity_obj.client_publish_pub_key = request.client_publish_pub_key
             entity_obj.client_device_id_pub_key = request.client_device_id_pub_key
             entity_obj.publish_keypair = entity_publish_keypair.serialize()
             entity_obj.device_id_keypair = entity_device_id_keypair.serialize()
-            entity_obj.save()
+            entity_obj.save(
+                only=[
+                    "device_id",
+                    "client_publish_pub_key",
+                    "client_device_id_pub_key",
+                    "publish_keypair",
+                    "device_id_keypair",
+                ]
+            )
 
             return response(
                 long_lived_token=long_lived_token,
@@ -648,7 +625,7 @@ class EntityService(vault_pb2_grpc.EntityServicer):
                 request,
                 response,
                 [
-                    "phone_number",
+                    ("phone_number", "email_address"),
                     "password",
                     "client_publish_pub_key",
                     "client_device_id_pub_key",
@@ -660,14 +637,21 @@ class EntityService(vault_pb2_grpc.EntityServicer):
             if invalid_fields_response:
                 return invalid_fields_response
 
-            phone_number_hash = generate_hmac(HASHING_KEY, request.phone_number)
-            entity_obj = find_entity(phone_number_hash=phone_number_hash)
+            identifier_type, identifier_value = self.get_identifier(request)
+            if identifier_type == ContactType.EMAIL:
+                email_address = identifier_value
+                email_address_hash = generate_hmac(HASHING_KEY, email_address)
+                entity_obj = find_entity(email_hash=email_address_hash)
+            else:
+                phone_number = identifier_value
+                phone_number_hash = generate_hmac(HASHING_KEY, phone_number)
+                entity_obj = find_entity(phone_number_hash=phone_number_hash)
 
             if not entity_obj:
                 return self.handle_create_grpc_error_response(
                     context,
                     response,
-                    "Entity with this phone number not found.",
+                    f"Entity with this {identifier_type.value} not found.",
                     grpc.StatusCode.NOT_FOUND,
                 )
 
@@ -870,7 +854,8 @@ class EntityService(vault_pb2_grpc.EntityServicer):
                 if not captcha_success:
                     return captcha_error
 
-            entity_lock = self._get_entity_lock(request.phone_number)
+            _, identifier_value = self.get_identifier(request)
+            entity_lock = self._get_entity_lock(identifier_value)
             with entity_lock:
                 success, pow_response = self.handle_pow_initialization(
                     context, request, response
@@ -881,7 +866,7 @@ class EntityService(vault_pb2_grpc.EntityServicer):
                 message, expires = pow_response
                 entity_obj.device_id = None
                 entity_obj.server_state = None
-                entity_obj.save()
+                entity_obj.save(only=["device_id", "server_state"])
 
                 return response(
                     requires_ownership_proof=True,
@@ -914,16 +899,26 @@ class EntityService(vault_pb2_grpc.EntityServicer):
             long_lived_token = generate_llt(eid, device_id_shared_key)
 
             entity_obj.password_hash = password_hash
+            _, identifier_value = self.get_identifier(request)
             entity_obj.device_id = compute_device_id(
                 device_id_shared_key,
-                request.phone_number,
+                identifier_value,
                 base64.b64decode(request.client_device_id_pub_key),
             )
             entity_obj.client_publish_pub_key = request.client_publish_pub_key
             entity_obj.client_device_id_pub_key = request.client_device_id_pub_key
             entity_obj.publish_keypair = entity_publish_keypair.serialize()
             entity_obj.device_id_keypair = entity_device_id_keypair.serialize()
-            entity_obj.save()
+            entity_obj.save(
+                only=[
+                    "password_hash",
+                    "device_id",
+                    "client_publish_pub_key",
+                    "client_device_id_pub_key",
+                    "publish_keypair",
+                    "device_id_keypair",
+                ]
+            )
 
             return response(
                 long_lived_token=long_lived_token,
@@ -942,7 +937,7 @@ class EntityService(vault_pb2_grpc.EntityServicer):
                 request,
                 response,
                 [
-                    "phone_number",
+                    ("phone_number", "email_address"),
                     "new_password",
                     "client_publish_pub_key",
                     "client_device_id_pub_key",
@@ -967,14 +962,21 @@ class EntityService(vault_pb2_grpc.EntityServicer):
             if invalid_fields_response:
                 return invalid_fields_response
 
-            phone_number_hash = generate_hmac(HASHING_KEY, request.phone_number)
-            entity_obj = find_entity(phone_number_hash=phone_number_hash)
+            identifier_type, identifier_value = self.get_identifier(request)
+            if identifier_type == ContactType.EMAIL:
+                email_address = identifier_value
+                email_address_hash = generate_hmac(HASHING_KEY, email_address)
+                entity_obj = find_entity(email_hash=email_address_hash)
+            else:
+                phone_number = identifier_value
+                phone_number_hash = generate_hmac(HASHING_KEY, phone_number)
+                entity_obj = find_entity(phone_number_hash=phone_number_hash)
 
             if not entity_obj:
                 return self.handle_create_grpc_error_response(
                     context,
                     response,
-                    "Entity with this phone number not found.",
+                    f"Entity with this {identifier_type.value} not found.",
                     grpc.StatusCode.NOT_FOUND,
                 )
 

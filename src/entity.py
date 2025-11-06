@@ -10,7 +10,7 @@ logger = get_logger(__name__)
 database = Entity._meta.database
 
 
-def create_entity(eid, phone_number_hash, password_hash, country_code, **kwargs):
+def create_entity(eid, password_hash, country_code, **kwargs):
     """
     Create a new entity.
 
@@ -27,7 +27,6 @@ def create_entity(eid, phone_number_hash, password_hash, country_code, **kwargs)
     with database.atomic():
         entity_data = {
             "eid": eid,
-            "phone_number_hash": phone_number_hash,
             "password_hash": password_hash,
             "country_code": country_code,
             **kwargs,

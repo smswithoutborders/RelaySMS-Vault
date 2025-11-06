@@ -1,0 +1,88 @@
+[
+  {
+    "action": "drop_index",
+    "table": "entities",
+    "index_name": "entity_phone_number_hash"
+  },
+  {
+    "action": "drop_not_null",
+    "table": "entities",
+    "column": "phone_number_hash"
+  },
+  {
+    "action": "add_index",
+    "table": "entities",
+    "columns": ["phone_number_hash"],
+    "unique": true
+  },
+  {
+    "action": "add_column",
+    "table": "entities",
+    "column_name": "email_hash",
+    "field": "CharField(null=True)"
+  },
+  {
+    "action": "add_index",
+    "table": "entities",
+    "columns": ["email_hash"],
+    "unique": true
+  },
+  {
+    "action": "drop_index",
+    "table": "otp_rate_limit",
+    "index_name": "otpratelimit_phone_number"
+  },
+  {
+    "action": "drop_not_null",
+    "table": "otp_rate_limit",
+    "column": "phone_number"
+  },
+  {
+    "action": "add_index",
+    "table": "otp_rate_limit",
+    "columns": ["phone_number"],
+    "unique": true
+  },
+  {
+    "action": "add_column",
+    "table": "otp_rate_limit",
+    "column_name": "email",
+    "field": "CharField(null=True)"
+  },
+  {
+    "action": "add_index",
+    "table": "otp_rate_limit",
+    "columns": ["email"],
+    "unique": true
+  },
+  {
+    "action": "drop_foreign_key_constraint",
+    "table": "password_rate_limit",
+    "column_name": "eid"
+  },
+  {
+    "action": "add_foreign_key_constraint",
+    "table": "password_rate_limit",
+    "column_name": "eid",
+    "rel": "entities",
+    "rel_column": "eid",
+    "on_delete": "CASCADE"
+  },
+  {
+    "action": "drop_not_null",
+    "table": "otp",
+    "column": "phone_number"
+  },
+  {
+    "action": "add_column",
+    "table": "otp",
+    "column_name": "email",
+    "field": "CharField(null=True)"
+  },
+  {
+    "action": "add_index",
+    "table": "otp",
+    "columns": ["email"],
+    "unique": false
+  }
+]

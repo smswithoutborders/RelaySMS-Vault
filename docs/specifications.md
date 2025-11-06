@@ -135,7 +135,7 @@ print(llt_plaintext)
 ### Purpose
 
 The device ID is a unique identifier for a device which can be used to identify
-an entity other than their phone number. This is useful as entities can use
+an entity other than their phone number or email address. This is useful as entities can use
 other phone numbers other than the one used to create their account with an
 authenticated device to be able to publish messages with RelaySMS.
 
@@ -143,7 +143,7 @@ authenticated device to be able to publish messages with RelaySMS.
 
 #### 1. Generating Device ID:
 
-- **Hashing**: An `HMAC` with the `SHA-256` hash algorithm is used to hash a combination of the entity's `phone number` ([E.164 format](https://en.wikipedia.org/wiki/E.164), e.g., +237123456789) and the entity's `device ID public key` (in bytes) used for the `X25519` handshake between the client and the vault. The `device_id` shared secret key obtained from the `X25519` handshake between the client and the vault is then used as the `HMAC` key for hashing the combination `(phone_number + public_key_bytes)`. The resulting bytes of the hash then become the computed device ID.
+- **Hashing**: An `HMAC` with the `SHA-256` hash algorithm is used to hash a combination of the entity's `identifier` (phone number in [E.164 format](https://en.wikipedia.org/wiki/E.164), e.g., +237123456789, or email address) and the entity's `device ID public key` (in bytes) used for the `X25519` handshake between the client and the vault. The `device_id` shared secret key obtained from the `X25519` handshake between the client and the vault is then used as the `HMAC` key for hashing the combination `(identifier + public_key_bytes)`. The resulting bytes of the hash then become the computed device ID.
 
 > [!NOTE]
 >
@@ -155,20 +155,20 @@ authenticated device to be able to publish messages with RelaySMS.
 import hmac
 import hashlib
 
-def compute_device_id(secret_key: bytes, phone_number: str, public_key: bytes) -> bytes:
+def compute_device_id(secret_key: bytes, identifier: str, public_key: bytes) -> bytes:
     """
     Compute a device ID using HMAC and SHA-256.
 
     Args:
         secret_key (bytes): The secret key used for HMAC.
-        phone_number (str): The phone number to be included in the HMAC input.
+        identifier (str): The identifier (phone number or email) to be included in the HMAC input.
         public_key (bytes): The public key to be included in the HMAC input.
 
     Returns:
         bytes: The bytes representation of the HMAC digest.
     """
-    # Combine phone number and public key
-    combined_input = phone_number.encode("utf-8") + public_key
+    # Combine identifier and public key
+    combined_input = identifier.encode("utf-8") + public_key
     # Compute HMAC with SHA-256
     hmac_object = hmac.new(secret_key, combined_input, hashlib.sha256)
     # Return bytes representation of HMAC digest

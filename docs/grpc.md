@@ -135,7 +135,8 @@ creation process.
 
 | Field                    | Type   | Description                                                                                                                                |
 | ------------------------ | ------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| phone_number             | string | The phone number associated with the entity. It should be in [E164 format](https://en.wikipedia.org/wiki/E.164). e.g., +237123456789.      |
+| phone_number             | string | The phone number associated with the entity (optional). It should be in [E164 format](https://en.wikipedia.org/wiki/E.164). e.g., +237123456789. |
+| email_address            | string | The email address associated with the entity (optional).                                                                                         |
 | country_code             | string | The [ISO 3166-1 alpha-2 code](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2) associated with the phone number. e.g., `CM` for Cameroon. |
 | password                 | string | A secure password for the entity.                                                                                                          |
 | client_publish_pub_key   | string | An `X25519` public key for publishing, `base64 encoded`.                                                                                   |
@@ -198,6 +199,7 @@ localhost:6000 vault.v1.Entity/CreateEntity <payload.json
 {
   "country_code": "CM",
   "phone_number": "+237123456789",
+  "email_address": "mail@example.com",
   "password": "Password@123",
   "client_publish_pub_key": "x25519 client publish public key",
   "client_device_id_pub_key": "x25519 client device_id public key"
@@ -238,7 +240,8 @@ localhost:6000 vault.v1.Entity/CreateEntity <payload.json
 
 | Field                    | Type   | Description                                                                                                                                |
 | ------------------------ | ------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| phone_number             | string | The phone number associated with the entity. It should be in [E164 format](https://en.wikipedia.org/wiki/E.164). e.g., +237123456789.      |
+| phone_number             | string | The phone number associated with the entity (optional). It should be in [E164 format](https://en.wikipedia.org/wiki/E.164). e.g., +237123456789. |
+| email_address            | string | The email address associated with the entity (optional).                                                                                         |
 | country_code             | string | The [ISO 3166-1 alpha-2 code](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2) associated with the phone number. e.g., `CM` for Cameroon. |
 | password                 | string | A secure password for the entity.                                                                                                          |
 | ownership_proof_response | string | The proof response from the previous step.                                                                                                 |
@@ -302,6 +305,7 @@ localhost:6000 vault.v1.Entity/CreateEntity <payload.json
 {
   "country_code": "CM",
   "phone_number": "+237123456789",
+  "email_address": "mail@example.com",
   "password": "Password@123",
   "client_publish_pub_key": "x25519 client publish public key",
   "client_device_id_pub_key": "x25519 client device_id public key",
@@ -349,13 +353,14 @@ of ownership for the phone number.
 > The table lists only the required fields for this step. Other fields will be
 > ignored.
 
-| Field                    | Type   | Description                                                                                                                           |
-| ------------------------ | ------ | ------------------------------------------------------------------------------------------------------------------------------------- |
-| phone_number             | string | The phone number associated with the entity. It should be in [E164 format](https://en.wikipedia.org/wiki/E.164). e.g., +237123456789. |
-| password                 | string | A secure password for the entity.                                                                                                     |
-| client_publish_pub_key   | string | An `X25519` public key for publishing, `base64 encoded`.                                                                              |
-| client_device_id_pub_key | string | An `X25519` public key for device ID, `base64 encoded`.                                                                               |
-| captcha_token            | string | The captcha token to be verified.                                                                                                     |
+| Field                    | Type   | Description                                                                                                                                      |
+| ------------------------ | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| phone_number             | string | The phone number associated with the entity (optional). It should be in [E164 format](https://en.wikipedia.org/wiki/E.164). e.g., +237123456789. |
+| email_address            | string | The email address associated with the entity (optional).                                                                                         |
+| password                 | string | A secure password for the entity.                                                                                                                |
+| client_publish_pub_key   | string | An `X25519` public key for publishing, `base64 encoded`.                                                                                         |
+| client_device_id_pub_key | string | An `X25519` public key for device ID, `base64 encoded`.                                                                                          |
+| captcha_token            | string | The captcha token to be verified.                                                                                                                |
 
 ---
 
@@ -413,6 +418,7 @@ localhost:6000 vault.v1.Entity/AuthenticateEntity <payload.json
 ```json
 {
   "phone_number": "+237123456789",
+  "email_address": "mail@example.com",
   "password": "Password@123",
   "client_publish_pub_key": "x25519 client publish public key",
   "client_device_id_pub_key": "x25519 client device_id public key"
@@ -452,13 +458,14 @@ localhost:6000 vault.v1.Entity/AuthenticateEntity <payload.json
 > The table lists only the required fields for this step. Other fields will be
 > ignored.
 
-| Field                    | Type   | Description                                                                                                                           |
-| ------------------------ | ------ | ------------------------------------------------------------------------------------------------------------------------------------- |
-| phone_number             | string | The phone number associated with the entity. It should be in [E164 format](https://en.wikipedia.org/wiki/E.164). e.g., +237123456789. |
-| password                 | string | A secure password for the entity.                                                                                                     |
-| ownership_proof_response | string | The proof response from the previous step.                                                                                            |
-| client_publish_pub_key   | string | An `X25519` public key for publishing, `base64 encoded`.                                                                              |
-| client_device_id_pub_key | string | An `X25519` public key for device ID, `base64 encoded`.                                                                               |
+| Field                    | Type   | Description                                                                                                                                      |
+| ------------------------ | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| phone_number             | string | The phone number associated with the entity (optional). It should be in [E164 format](https://en.wikipedia.org/wiki/E.164). e.g., +237123456789. |
+| email_address            | string | The email address associated with the entity (optional).                                                                                         |
+| password                 | string | A secure password for the entity.                                                                                                                |
+| ownership_proof_response | string | The proof response from the previous step.                                                                                                       |
+| client_publish_pub_key   | string | An `X25519` public key for publishing, `base64 encoded`.                                                                                         |
+| client_device_id_pub_key | string | An `X25519` public key for device ID, `base64 encoded`.                                                                                          |
 
 ---
 
@@ -516,6 +523,7 @@ localhost:6000 vault.v1.Entity/AuthenticateEntity <payload.json
 ```json
 {
   "phone_number": "+237123456789",
+  "email_address": "mail@example.com",
   "password": "Password@123",
   "client_publish_pub_key": "x25519 client publish public key",
   "client_device_id_pub_key": "x25519 client device_id public key",
@@ -1001,13 +1009,14 @@ of ownership for the phone number.
 > The table lists only the required fields for this step. Other fields will be
 > ignored.
 
-| Field                    | Type   | Description                                                                                                                           |
-| ------------------------ | ------ | ------------------------------------------------------------------------------------------------------------------------------------- |
-| phone_number             | string | The phone number associated with the entity. It should be in [E164 format](https://en.wikipedia.org/wiki/E.164). e.g., +237123456789. |
-| new_password             | string | A new secure password for the entity.                                                                                                 |
-| client_publish_pub_key   | string | An `X25519` public key for publishing, `base64 encoded`.                                                                              |
-| client_device_id_pub_key | string | An `X25519` public key for device ID, `base64 encoded`.                                                                               |
-| captcha_token            | string | The captcha token to be verified.                                                                                                     |
+| Field                    | Type   | Description                                                                                                                                      |
+| ------------------------ | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| phone_number             | string | The phone number associated with the entity (optional). It should be in [E164 format](https://en.wikipedia.org/wiki/E.164). e.g., +237123456789. |
+| email_address            | string | The email address associated with the entity (optional).                                                                                         |
+| new_password             | string | A new secure password for the entity.                                                                                                            |
+| client_publish_pub_key   | string | An `X25519` public key for publishing, `base64 encoded`.                                                                                         |
+| client_device_id_pub_key | string | An `X25519` public key for device ID, `base64 encoded`.                                                                                          |
+| captcha_token            | string | The captcha token to be verified.                                                                                                                |
 
 ---
 
@@ -1064,6 +1073,7 @@ localhost:6000 vault.v1.Entity/ResetPassword <payload.json
 ```json
 {
   "phone_number": "+237123456789",
+  "email_address": "mail@example.com",
   "new_password": "Password@123",
   "client_publish_pub_key": "x25519 client publish public key",
   "client_device_id_pub_key": "x25519 client device_id public key"
@@ -1103,13 +1113,14 @@ localhost:6000 vault.v1.Entity/ResetPassword <payload.json
 > The table lists only the required fields for this step. Other fields will be
 > ignored.
 
-| Field                    | Type   | Description                                                                                                                           |
-| ------------------------ | ------ | ------------------------------------------------------------------------------------------------------------------------------------- |
-| phone_number             | string | The phone number associated with the entity. It should be in [E164 format](https://en.wikipedia.org/wiki/E.164). e.g., +237123456789. |
-| new_password             | string | A new secure password for the entity.                                                                                                 |
-| ownership_proof_response | string | The proof response from the previous step.                                                                                            |
-| client_publish_pub_key   | string | An `X25519` public key for publishing, `base64 encoded`.                                                                              |
-| client_device_id_pub_key | string | An `X25519` public key for device ID, `base64 encoded`.                                                                               |
+| Field                    | Type   | Description                                                                                                                                      |
+| ------------------------ | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| phone_number             | string | The phone number associated with the entity (optional). It should be in [E164 format](https://en.wikipedia.org/wiki/E.164). e.g., +237123456789. |
+| email_address            | string | The email address associated with the entity (optional).                                                                                         |
+| new_password             | string | A new secure password for the entity.                                                                                                            |
+| ownership_proof_response | string | The proof response from the previous step.                                                                                                       |
+| client_publish_pub_key   | string | An `X25519` public key for publishing, `base64 encoded`.                                                                                         |
+| client_device_id_pub_key | string | An `X25519` public key for device ID, `base64 encoded`.                                                                                          |
 
 ---
 
@@ -1167,6 +1178,7 @@ localhost:6000 vault.v1.Entity/ResetPassword <payload.json
 ```json
 {
   "phone_number": "+237123456789",
+  "email_address": "mail@example.com",
   "new_password": "Password@123",
   "client_publish_pub_key": "x25519 client publish public key",
   "client_device_id_pub_key": "x25519 client device_id public key",

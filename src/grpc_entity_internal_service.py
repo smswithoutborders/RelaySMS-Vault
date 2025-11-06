@@ -1,8 +1,5 @@
-"""
-This program is free software: you can redistribute it under the terms
-of the GNU General Public License, v. 3.0. If a copy of the GNU General
-Public License was not distributed with this file, see <https://www.gnu.org/licenses/>.
-"""
+# SPDX-License-Identifier: GPL-3.0-only
+"""gRPC Entity Internal Service"""
 
 import base64
 import re
@@ -62,10 +59,7 @@ class EntityInternalService(vault_pb2_grpc.EntityInternalServicer):
 
     @classmethod
     def _get_entity_lock(cls, entity_id: str) -> threading.Lock:
-        """
-        Get or create a lock for a specific entity.
-        Locks are automatically removed when no longer used.
-        """
+        """Get or create a lock for a specific entity."""
         with cls._locks_lock:
             lock = cls._entity_locks.get(entity_id)
             if lock is None:
@@ -77,27 +71,7 @@ class EntityInternalService(vault_pb2_grpc.EntityInternalServicer):
     def handle_create_grpc_error_response(
         self, context, response, error, status_code, **kwargs
     ):
-        """
-        Handles the creation of a gRPC error response.
-
-        Args:
-            context (grpc.ServicerContext): The gRPC context object.
-            response (callable): The gRPC response object.
-            error (Exception or str): The exception instance or error message.
-            status_code (grpc.StatusCode): The gRPC status code to be set for the response
-                (e.g., grpc.StatusCode.INTERNAL).
-            user_msg (str, optional): A user-friendly error message to be returned to the client.
-                If not provided, the `error` message will be used.
-            error_type (str, optional): A string identifying the type of error.
-                When set to "UNKNOWN", it triggers the logging of a full exception traceback
-                for debugging purposes.
-            error_prefix (str, optional): An optional prefix to prepend to the error message
-                for additional context (e.g., indicating the specific operation or subsystem
-                that caused the error).
-
-        Returns:
-            An instance of the specified response with the error set.
-        """
+        """Handles the creation of a gRPC error response."""
         user_msg = kwargs.get("user_msg")
         error_type = kwargs.get("error_type")
         error_prefix = kwargs.get("error_prefix")
@@ -117,19 +91,7 @@ class EntityInternalService(vault_pb2_grpc.EntityInternalServicer):
     def handle_request_field_validation(
         self, context, request, response, required_fields
     ):
-        """
-        Validates the fields in the gRPC request.
-
-        Args:
-            context: gRPC context.
-            request: gRPC request object.
-            response: gRPC response object.
-            required_fields (list): List of required fields, can include tuples.
-
-        Returns:
-            None or response: None if no missing fields,
-                error response otherwise.
-        """
+        """Validates the fields in the gRPC request."""
         x25519_fields = {"client_publish_pub_key", "client_device_id_pub_key"}
 
         for field in required_fields:
@@ -863,7 +825,6 @@ class EntityInternalService(vault_pb2_grpc.EntityInternalServicer):
             success, message = verify_otp(
                 request.phone_number,
                 request.ownership_proof_response,
-                use_twilio=False,
             )
             if not success:
                 return self.handle_create_grpc_error_response(
@@ -921,7 +882,7 @@ class EntityInternalService(vault_pb2_grpc.EntityInternalServicer):
             if MOCK_OTP:
                 otp_code = "123456"
             else:
-                _, otp_result = create_inapp_otp(phone_number=request.phone_number)
+                _, otp_result = create_inapp_otp(request.phone_number)
                 otp_code, _ = otp_result
 
             logger.debug(
