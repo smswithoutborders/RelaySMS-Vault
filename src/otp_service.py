@@ -11,7 +11,7 @@ import requests
 from twilio.rest import Client
 from twilio.base.exceptions import TwilioRestException
 from src.db_models import OTPRateLimit, OTP
-from src.utils import get_configs
+from src.utils import get_configs, get_bool_config, get_list_config
 from src.sms_outbound import (
     get_phonenumber_region_code,
     send_with_queuedroid,
@@ -26,10 +26,26 @@ TWILIO_AUTH_TOKEN = get_configs("TWILIO_AUTH_TOKEN")
 TWILIO_SERVICE_SID = get_configs("TWILIO_SERVICE_SID")
 TWILIO_PHONE_NUMBER = get_configs("TWILIO_PHONE_NUMBER")
 
+MOCK_OTP = get_bool_config("MOCK_OTP")
+DUMMY_PHONENUMBERS = get_configs(
+    "DUMMY_PHONENUMBER", default_value="+237123456789"
+).split(",")
+
+SMS_OTP_ENABLED = get_bool_config("SMS_OTP_ENABLED")
+SMS_OTP_ALLOWED_COUNTRIES = get_list_config("SMS_OTP_ALLOWED_COUNTRIES")
+SMS_OTP_AUTH_ENABLED = get_bool_config("SMS_OTP_AUTH_ENABLED")
+SMS_OTP_SIGNUP_ENABLED = get_bool_config("SMS_OTP_SIGNUP_ENABLED")
+SMS_OTP_RESET_PASSWORD_ENABLED = get_bool_config("SMS_OTP_RESET_PASSWORD_ENABLED")
+
+EMAIL_OTP_ENABLED = get_bool_config("EMAIL_OTP_ENABLED")
+EMAIL_OTP_AUTH_ENABLED = get_bool_config("EMAIL_OTP_AUTH_ENABLED")
+EMAIL_OTP_SIGNUP_ENABLED = get_bool_config("EMAIL_OTP_SIGNUP_ENABLED")
+EMAIL_OTP_RESET_PASSWORD_ENABLED = get_bool_config("EMAIL_OTP_RESET_PASSWORD_ENABLED")
+
 EMAIL_SERVICE_URL = get_configs("EMAIL_SERVICE_URL")
 EMAIL_SERVICE_API_KEY = get_configs("EMAIL_SERVICE_API_KEY")
-EMAIL_ALIAS_DOMAIN = get_configs("EMAIL_ALIAS_DOMAIN")
-EMAIL_SENDER_MAILBOX = get_configs("EMAIL_SENDER_MAILBOX")
+EMAIL_VERIFICATION_SENDER_ADDRESS = get_configs("EMAIL_VERIFICATION_SENDER_ADDRESS")
+
 EMAIL_LOGO_URL = get_configs("EMAIL_LOGO_URL")
 EMAIL_SUBJECT = get_configs(
     "EMAIL_SUBJECT", default_value="{{ project_name }} Verification Code"
@@ -47,26 +63,9 @@ EMAIL_ABUSE_EMAIL = get_configs(
 EMAIL_SUPPORT_EMAIL = get_configs(
     "EMAIL_SUPPORT_EMAIL", default_value="support@smswithoutborders.com"
 )
-EMAIL_ALIAS_PREFIX = get_configs("EMAIL_ALIAS_PREFIX", default_value="noreply")
 EMAIL_OTP_EXPIRY_MINUTES = int(
     get_configs("EMAIL_OTP_EXPIRY_MINUTES", default_value="10")
 )
-
-MOCK_OTP = get_configs("MOCK_OTP")
-MOCK_OTP = MOCK_OTP.lower() == "true" if MOCK_OTP is not None else False
-DUMMY_PHONENUMBERS = get_configs(
-    "DUMMY_PHONENUMBER", default_value="+237123456789"
-).split(",")
-
-OTP_ENABLED = get_configs("OTP_ENABLED", default_value="true")
-OTP_ENABLED = OTP_ENABLED.lower() == "true" if OTP_ENABLED is not None else True
-OTP_ALLOWED_COUNTRIES = get_configs("OTP_ALLOWED_COUNTRIES")
-OTP_ALLOWED_COUNTRIES = [
-    c.strip().strip("'\"").upper()
-    for c in (OTP_ALLOWED_COUNTRIES or "").strip("[]").split(",")
-    if c
-]
-
 RATE_LIMIT_WINDOWS = [
     {"duration": 5, "count": 1},  # 5 minute window
     {"duration": 10, "count": 2},  # 10 minute window
@@ -80,6 +79,14 @@ class ContactType(Enum):
 
     PHONE = "phone_number"
     EMAIL = "email_address"
+
+
+class OTPAction(Enum):
+    """OTP action types for granular control."""
+
+    AUTH = "auth"
+    SIGNUP = "signup"
+    RESET_PASSWORD = "reset_password"
 
 
 class MockOTPHandler:
@@ -126,19 +133,23 @@ class SMSDeliveryMethod(OTPDeliveryMethod):
         """Send OTP via SMS."""
         logger.debug("Sending SMS OTP")
 
-        if OTP_ALLOWED_COUNTRIES:
-            region_code = get_phonenumber_region_code(identifier)
-            if region_code not in OTP_ALLOWED_COUNTRIES:
-                logger.info("OTP blocked for region: %s", region_code)
+        if SMS_OTP_ALLOWED_COUNTRIES:
+            region_code, country_name = get_phonenumber_region_code(identifier)
+            if region_code not in SMS_OTP_ALLOWED_COUNTRIES:
+                logger.info(
+                    "SMS OTP blocked for country: %s with region: %s",
+                    country_name,
+                    region_code,
+                )
                 return (
                     False,
-                    "OTP service unavailable for your region. Contact support.",
+                    "SMS OTP service unavailable for your region. Try email OTP or contact support.",
                 )
 
         if MOCK_OTP or identifier in DUMMY_PHONENUMBERS:
             return MockOTPHandler.send()
 
-        region_code = get_phonenumber_region_code(identifier)
+        region_code, _ = get_phonenumber_region_code(identifier)
         if region_code in QUEUEDROID_SUPPORTED_VERIFICATION_REGION_CODES:
             _, otp_result = create_inapp_otp(identifier, ContactType.PHONE)
             otp_code, _ = otp_result
@@ -149,19 +160,23 @@ class SMSDeliveryMethod(OTPDeliveryMethod):
         """Verify OTP via SMS."""
         logger.debug("Verifying SMS OTP")
 
-        if OTP_ALLOWED_COUNTRIES:
-            region_code = get_phonenumber_region_code(identifier)
-            if region_code not in OTP_ALLOWED_COUNTRIES:
-                logger.info("OTP blocked for region: %s", region_code)
+        if SMS_OTP_ALLOWED_COUNTRIES:
+            region_code, country_name = get_phonenumber_region_code(identifier)
+            if region_code not in SMS_OTP_ALLOWED_COUNTRIES:
+                logger.info(
+                    "SMS OTP blocked for country: %s with region: %s",
+                    country_name,
+                    region_code,
+                )
                 return (
                     False,
-                    "OTP service unavailable for your region. Contact support.",
+                    "SMS OTP service unavailable for your region. Try email OTP or contact support.",
                 )
 
         if MOCK_OTP or identifier in DUMMY_PHONENUMBERS:
             return MockOTPHandler.verify(otp_code)
 
-        region_code = get_phonenumber_region_code(identifier)
+        region_code, _ = get_phonenumber_region_code(identifier)
         if region_code in QUEUEDROID_SUPPORTED_VERIFICATION_REGION_CODES:
             return verify_inapp_otp(identifier, otp_code, ContactType.PHONE)
         return self._verify_with_twilio(identifier, otp_code)
@@ -281,18 +296,14 @@ class EmailDeliveryMethod(OTPDeliveryMethod):
                 minutes=EMAIL_OTP_EXPIRY_MINUTES
             )
 
-            expiration_date_time = expiration_time.strftime("%B %d, %Y at %I:%M %p %Z")
-            if not expiration_date_time.endswith(" "):
-                expiration_date_time = expiration_time.strftime(
-                    "%B %d, %Y at %I:%M %p UTC"
-                )
+            if expiration_time.tzinfo is None:
+                expiration_time = expiration_time.replace(tzinfo=datetime.timezone.utc)
 
-            if EMAIL_OTP_EXPIRY_MINUTES == 1:
-                expiration_time_words = "1 minute"
-            else:
-                expiration_time_words = f"{EMAIL_OTP_EXPIRY_MINUTES} minutes"
+            expiration_date_time = expiration_time.strftime("%B %d, %Y at %I:%M %p %Z")
+            expiration_time_words = f"{EMAIL_OTP_EXPIRY_MINUTES} minute{'s' if EMAIL_OTP_EXPIRY_MINUTES != 1 else ''}"
 
             payload = {
+                "from_email": EMAIL_VERIFICATION_SENDER_ADDRESS,
                 "to_email": email_address,
                 "subject": EMAIL_SUBJECT,
                 "template": "otp",
@@ -307,9 +318,6 @@ class EmailDeliveryMethod(OTPDeliveryMethod):
                     "abuse_email": EMAIL_ABUSE_EMAIL,
                     "support_email": EMAIL_SUPPORT_EMAIL,
                 },
-                "alias_prefix": EMAIL_ALIAS_PREFIX,
-                "alias_domain": EMAIL_ALIAS_DOMAIN,
-                "sender_mailbox": EMAIL_SENDER_MAILBOX,
             }
 
             headers = {
@@ -354,6 +362,32 @@ class OTPService:
         self.email_delivery = EmailDeliveryMethod()
 
 
+def is_delivery_method_enabled(
+    contact_type: ContactType, action: Optional[OTPAction] = None
+) -> bool:
+    """Check if a delivery method is enabled for a specific action."""
+    if contact_type == ContactType.EMAIL:
+        if not EMAIL_OTP_ENABLED:
+            return False
+        if action == OTPAction.AUTH:
+            return EMAIL_OTP_AUTH_ENABLED
+        if action == OTPAction.SIGNUP:
+            return EMAIL_OTP_SIGNUP_ENABLED
+        if action == OTPAction.RESET_PASSWORD:
+            return EMAIL_OTP_RESET_PASSWORD_ENABLED
+        return EMAIL_OTP_ENABLED
+    else:
+        if not SMS_OTP_ENABLED:
+            return False
+        if action == OTPAction.AUTH:
+            return SMS_OTP_AUTH_ENABLED
+        if action == OTPAction.SIGNUP:
+            return SMS_OTP_SIGNUP_ENABLED
+        if action == OTPAction.RESET_PASSWORD:
+            return SMS_OTP_RESET_PASSWORD_ENABLED
+        return SMS_OTP_ENABLED
+
+
 def get_rate_limit_key(identifier: str, contact_type: ContactType) -> dict:
     """Get rate limiting field based on contact type."""
     return (
@@ -395,13 +429,20 @@ def send_otp(
     identifier: str,
     contact_type: ContactType = ContactType.PHONE,
     message_body: Optional[str] = None,
+    action: Optional[OTPAction] = None,
 ) -> Tuple[bool, str, Optional[int]]:
     """Send OTP to identifier (phone or email)."""
     logger.debug("Sending OTP")
 
-    if not OTP_ENABLED:
-        logger.info("OTP service disabled")
-        return False, "OTP service temporarily unavailable. Contact support.", None
+    if not is_delivery_method_enabled(contact_type, action):
+        action_str = f" for {action.value}" if action else ""
+        method_str = "email" if contact_type == ContactType.EMAIL else "SMS"
+        logger.info("%s OTP disabled%s", method_str, action_str)
+        return (
+            False,
+            f"{method_str.upper()} OTP service unavailable for your region. Contact support.",
+            None,
+        )
 
     if is_rate_limited(identifier, contact_type):
         return False, "Too many OTP requests. Wait and try again.", None
@@ -425,13 +466,19 @@ def verify_otp(
     identifier: str,
     otp_code: str,
     contact_type: ContactType = ContactType.PHONE,
+    action: Optional[OTPAction] = None,
 ) -> Tuple[bool, str]:
     """Verify OTP for identifier."""
     logger.debug("Verifying OTP")
 
-    if not OTP_ENABLED:
-        logger.info("OTP service disabled")
-        return False, "OTP service temporarily unavailable. Contact support."
+    if not is_delivery_method_enabled(contact_type, action):
+        action_str = f" for {action.value}" if action else ""
+        method_str = "email" if contact_type == ContactType.EMAIL else "SMS"
+        logger.info("%s OTP disabled%s", method_str, action_str)
+        return (
+            False,
+            f"{method_str.upper()} OTP service unavailable for your region. Contact support.",
+        )
 
     rate_limit_filter = get_rate_limit_key(identifier, contact_type)
     if not OTPRateLimit.get_or_none(**rate_limit_filter):

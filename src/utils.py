@@ -137,7 +137,7 @@ def ensure_database_exists(host, user, password, database_name):
     return decorator
 
 
-def get_configs(config_name, strict=False, default_value=None):
+def get_configs(config_name, strict=False, default_value: str = "") -> str:
     """
     Retrieves the value of a configuration from the environment variables.
 
@@ -175,6 +175,34 @@ def get_configs(config_name, strict=False, default_value=None):
     except ValueError as error:
         logger.error("Configuration '%s' is empty: %s", config_name, error)
         raise
+
+
+def get_bool_config(key: str, default_value: bool = False) -> bool:
+    """
+    Retrieve a configuration value and interpret it as a boolean.
+    Accepts "true", "1", "yes", "on" as True; "false", "0", "no", "off" as False.
+    Case-insensitive. Falls back to `default` if missing or invalid.
+    """
+    value = get_configs(key)
+    if value is None:
+        return default_value
+
+    value = value.strip().lower()
+    if value in {"true", "1", "yes", "on"}:
+        return True
+    elif value in {"false", "0", "no", "off"}:
+        return False
+    return default_value
+
+
+def get_list_config(key: str, default_value: list[str] | None = None) -> list[str]:
+    """Retrieve a configuration value and interpret it as a list of strings."""
+    value = get_configs(key)
+    if not value:
+        return default_value or []
+
+    items = value.strip("[]")
+    return [c.strip().strip("'\"").upper() for c in items.split(",") if c.strip()]
 
 
 def set_configs(config_name, config_value) -> None:

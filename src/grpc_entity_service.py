@@ -18,7 +18,7 @@ from src import signups
 from src.entity import create_entity, find_entity
 from src.tokens import fetch_entity_tokens, update_entity_tokens
 from src.crypto import generate_hmac, verify_hmac
-from src.otp_service import send_otp, verify_otp, ContactType
+from src.otp_service import send_otp, verify_otp, ContactType, OTPAction
 from src.recaptcha import is_captcha_enabled, verify_captcha
 from src.utils import (
     load_key,
@@ -199,10 +199,12 @@ class EntityService(vault_pb2_grpc.EntityServicer):
             )
         return success, message
 
-    def handle_pow_initialization(self, context, request, response):
+    def handle_pow_initialization(self, context, request, response, action):
         """Handle proof of ownership initialization."""
         identifier_type, identifier_value = self.get_identifier(request)
-        success, message, expires = send_otp(identifier_value, identifier_type)
+        success, message, expires = send_otp(
+            identifier_value, identifier_type, action=action
+        )
         if not success:
             return success, self.handle_create_grpc_error_response(
                 context,
@@ -415,7 +417,7 @@ class EntityService(vault_pb2_grpc.EntityServicer):
             entity_lock = self._get_entity_lock(identifier_value)
             with entity_lock:
                 success, pow_response = self.handle_pow_initialization(
-                    context, request, response
+                    context, request, response, OTPAction.SIGNUP
                 )
 
                 if not success:
@@ -549,7 +551,7 @@ class EntityService(vault_pb2_grpc.EntityServicer):
             entity_lock = self._get_entity_lock(identifier_value)
             with entity_lock:
                 success, pow_response = self.handle_pow_initialization(
-                    context, request, response
+                    context, request, response, OTPAction.AUTH
                 )
                 if not success:
                     return pow_response
@@ -858,7 +860,7 @@ class EntityService(vault_pb2_grpc.EntityServicer):
             entity_lock = self._get_entity_lock(identifier_value)
             with entity_lock:
                 success, pow_response = self.handle_pow_initialization(
-                    context, request, response
+                    context, request, response, OTPAction.RESET_PASSWORD
                 )
                 if not success:
                     return pow_response
