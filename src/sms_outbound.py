@@ -7,7 +7,7 @@ Public License was not distributed with this file, see <https://www.gnu.org/lice
 import requests
 import phonenumbers
 from phonenumbers import geocoder
-from src.utils import get_configs
+from src.utils import get_configs, get_list_config
 from base_logger import get_logger
 
 
@@ -17,16 +17,9 @@ QUEUEDROID_API_URL = get_configs(
 QUEUEDROID_API_KEY = get_configs("QUEUEDROID_API_KEY")
 QUEUEDROID_EXCHANGE_ID = get_configs("QUEUEDROID_EXCHANGE_ID")
 QUEUEDROID_QUEUE_ID = get_configs("QUEUEDROID_QUEUE_ID")
-QUEUEDROID_SUPPORTED_VERIFICATION_REGION_CODES = get_configs(
+QUEUEDROID_SUPPORTED_VERIFICATION_REGION_CODES = get_list_config(
     "QUEUEDROID_SUPPORTED_VERIFICATION_REGION_CODES"
 )
-QUEUEDROID_SUPPORTED_VERIFICATION_REGION_CODES = [
-    c.strip().strip("'\"").upper()
-    for c in (QUEUEDROID_SUPPORTED_VERIFICATION_REGION_CODES or "")
-    .strip("[]")
-    .split(",")
-    if c
-]
 
 logger = get_logger(__name__)
 
@@ -64,7 +57,7 @@ def send_with_queuedroid(phone_number: str, message: str) -> bool:
         return False
 
 
-def get_phonenumber_region_code(phone_number: str) -> str:
+def get_phonenumber_region_code(phone_number: str) -> tuple:
     """
     Get the region code for a given phone number.
 
@@ -72,7 +65,9 @@ def get_phonenumber_region_code(phone_number: str) -> str:
         phone_number (str): The phone number in E.164 format.
 
     Returns:
-        str: The ISO 3166-1 alpha-2 region code corresponding to the phone number.
+        tuple: A tuple containing the region code (str) and country name (str).
     """
     parsed_number = phonenumbers.parse(phone_number)
-    return geocoder.region_code_for_number(parsed_number)
+    region_code = geocoder.region_code_for_number(parsed_number)
+    country_name = geocoder.description_for_number(parsed_number, "en")
+    return region_code, country_name
