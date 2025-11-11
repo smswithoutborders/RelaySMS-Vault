@@ -102,6 +102,7 @@ GET /v3/metrics/signup
   "total_signup_users": 120,
   "total_countries": 2,
   "total_signups_from_bridges": 3,
+  "total_signup_users_with_emails": 45,
   "countries": [
     "CM",
     "NG"
@@ -131,24 +132,31 @@ GET /v3/metrics/signup
 **Response Body (Examples):**
 
 - Missing required parameters:
+
   ```json
   {
     "error": "Invalid input parameters. Provide 'start_date' and 'end_date'."
   }
   ```
+
 - Invalid `page`, `page_size`, or conflicting parameters (e.g., `top` with pagination):
+
   ```json
   {
     "error": "'top' cannot be used with 'page' or 'page_size'."
   }
   ```
+
 - Invalid `granularity` value:
+
   ```json
   {
     "error": "Invalid granularity. Use 'day' or 'month'."
   }
   ```
+
 - Invalid `group_by` value:
+
   ```json
   {
     "error": "Invalid group_by value. Use 'country', 'date', or None."
@@ -191,6 +199,7 @@ GET /v3/metrics/retained
   "total_countries": 10,
   "total_retained_users": 75,
   "total_retained_users_with_tokens": 70,
+  "total_retained_users_with_emails": 30,
   "total_countries": 2,
   "countries": [
     "CM",
@@ -221,24 +230,31 @@ GET /v3/metrics/retained
 **Response Body (Examples):**
 
 - Missing required parameters:
+
   ```json
   {
     "error": "Invalid input parameters. Provide 'start_date' and 'end_date'."
   }
   ```
+
 - Invalid `page`, `page_size`, or conflicting parameters (e.g., `top` with pagination):
+
   ```json
   {
     "error": "'top' cannot be used with 'page' or 'page_size'."
   }
   ```
+
   - Invalid `granularity` value:
+
   ```json
   {
     "error": "Invalid granularity. Use 'day' or 'month'."
   }
   ```
+
 - Invalid `group_by` value:
+
   ```json
   {
     "error": "Invalid group_by value. Use 'country', 'date', or None."

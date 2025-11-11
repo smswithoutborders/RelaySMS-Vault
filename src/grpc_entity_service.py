@@ -413,7 +413,7 @@ class EntityService(vault_pb2_grpc.EntityServicer):
                 if not captcha_success:
                     return captcha_error
 
-            _, identifier_value = self.get_identifier(request)
+            identifier_type, identifier_value = self.get_identifier(request)
             entity_lock = self._get_entity_lock(identifier_value)
             with entity_lock:
                 success, pow_response = self.handle_pow_initialization(
@@ -426,7 +426,11 @@ class EntityService(vault_pb2_grpc.EntityServicer):
                 message, expires = pow_response
 
                 signups.create_record(
-                    country_code=request.country_code, source="platforms"
+                    country_code=request.country_code,
+                    source="platforms",
+                    auth_method="email"
+                    if identifier_type == ContactType.EMAIL
+                    else "phone_number",
                 )
 
                 return response(

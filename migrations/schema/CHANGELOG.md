@@ -1,5 +1,11 @@
 # Changelog
 
+## [v1.3.0] - 2025-11-11
+
+### Added
+
+- Added a new column `auth_method` of type `CharField(null=True, constraints=[SQL("DEFAULT 'phone_number'")])` to the `signups` table to track the authentication method used during signup (e.g., "email" or "phone_number"). Existing records will default to 'phone_number'.
+
 ## [v1.2.0] - 2025-11-04
 
 ### Added
