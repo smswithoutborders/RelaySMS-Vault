@@ -151,6 +151,9 @@ class Signups(Model):
 
     country_code = CharField()
     source = CharField()
+    auth_method = CharField(
+        null=True, default="phone_number", constraints=[SQL("DEFAULT 'phone_number'")]
+    )
     date_created = DateTimeField(default=datetime.datetime.now)
 
     class Meta:

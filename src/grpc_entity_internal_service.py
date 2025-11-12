@@ -65,7 +65,7 @@ class EntityInternalService(vault_pb2_grpc.EntityInternalServicer):
             if lock is None:
                 lock = threading.Lock()
                 cls._entity_locks[entity_id] = lock
-                logger.debug("Created new lock for entity %s", entity_id)
+                logger.debug("Created new lock for entity")
             return lock
 
     def handle_create_grpc_error_response(
@@ -420,7 +420,7 @@ class EntityInternalService(vault_pb2_grpc.EntityInternalServicer):
             entity_lock = self._get_entity_lock(entity_id)
 
             with entity_lock:
-                logger.debug("Acquired lock for entity %s", entity_id)
+                logger.debug("Acquired lock for entity")
                 entity_obj = find_entity(eid=entity_id)
 
                 decoded_response, decoding_error = decode_message()
@@ -430,7 +430,7 @@ class EntityInternalService(vault_pb2_grpc.EntityInternalServicer):
                 header, content_ciphertext = decoded_response
 
                 result = decrypt_message(entity_obj, header, content_ciphertext)
-                logger.debug("Released lock for entity %s", entity_id)
+                logger.debug("Released lock for entity")
                 return result
 
         except Exception as e:
@@ -917,7 +917,11 @@ class EntityInternalService(vault_pb2_grpc.EntityInternalServicer):
                     grpc.StatusCode.INVALID_ARGUMENT,
                 )
 
-            signups.create_record(country_code=request.country_code, source="bridges")
+            signups.create_record(
+                country_code=request.country_code,
+                source="bridges",
+                auth_method="phone_number",
+            )
 
             return response(success=True, message=message_body if MOCK_OTP else message)
 
@@ -1006,7 +1010,11 @@ class EntityInternalService(vault_pb2_grpc.EntityInternalServicer):
                 is_bridge_enabled=True,
                 language=request.language or DEFAULT_LANGUAGE,
             )
-            signups.create_record(country_code=request.country_code, source="bridges")
+            signups.create_record(
+                country_code=request.country_code,
+                source="bridges",
+                auth_method="phone_number",
+            )
 
             logger.info("Successfully created entity.")
             return response(success=True, message="Successfully created entity.")

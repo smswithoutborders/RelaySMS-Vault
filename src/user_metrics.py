@@ -43,6 +43,7 @@ def get_signup_users(filters=None, group_by=None, options=None):
                 - total_pages (int): Total pages (omitted if `group_by` is None).
             - total_signup_users (int): Total number of signup users across all records.
             - total_countries (int): Total number of distinct countries with signups.
+            - total_signup_users_with_emails (int): Total number of signup users with email addresses.
             - countries (list): List of distinct countries.
     """
     filters = filters or {}
@@ -100,12 +101,19 @@ def get_signup_users(filters=None, group_by=None, options=None):
         query = query.where(fn.LOWER(Signups.country_code) == country_code.lower())
 
     total_signup_users = query.select(fn.COUNT(Signups.id)).scalar()
-    total_countries = query.select(fn.COUNT(fn.DISTINCT(Signups.country_code))).scalar()
+    total_countries = query.select(
+        fn.COUNT(fn.DISTINCT(fn.UPPER(Signups.country_code)))
+    ).scalar()
     total_signups_from_bridges = (
         query.select(fn.COUNT(Signups.id)).where(Signups.source == "bridges").scalar()
     )
+    total_signup_users_with_emails = (
+        query.select(fn.COUNT(Signups.id))
+        .where(Signups.auth_method == "email")
+        .scalar()
+    )
 
-    countries_query = query.select(Signups.country_code.distinct())
+    countries_query = query.select(fn.UPPER(Signups.country_code).distinct())
     countries = [row.country_code for row in countries_query]
 
     if group_by is None:
@@ -115,6 +123,7 @@ def get_signup_users(filters=None, group_by=None, options=None):
             "total_signup_users": total_signup_users,
             "total_countries": total_countries,
             "total_signups_from_bridges": total_signups_from_bridges,
+            "total_signup_users_with_emails": total_signup_users_with_emails,
             "countries": countries,
         }
 
@@ -174,6 +183,7 @@ def get_signup_users(filters=None, group_by=None, options=None):
         "total_signup_users": total_signup_users,
         "total_countries": total_countries,
         "total_signups_from_bridges": total_signups_from_bridges,
+        "total_signup_users_with_emails": total_signup_users_with_emails,
         "countries": countries,
     }
 
@@ -209,6 +219,7 @@ def get_retained_users(filters=None, group_by=None, options=None):
                 - page_size (int): Records per page (omitted if `group_by` is None).
                 - total_pages (int): Total pages (omitted if `group_by` is None).
             - total_retained_users (int): Total number of retained users across all records.
+            - total_retained_users_with_emails (int): Total number of retained users with email addresses.
             - total_countries (int): Total number of unique countries.
             - countries (list): List of unique countries involved in the result.
     """
@@ -305,10 +316,23 @@ def get_retained_users(filters=None, group_by=None, options=None):
 
     for entity, decrypted_country in decrypted_rows:
         filtered_entities.append((entity, decrypted_country))
-        unique_countries.add(decrypted_country)
+        unique_countries.add(
+            decrypted_country.upper() if decrypted_country else decrypted_country
+        )
 
     total_retained_users = len(filtered_entities)
     total_countries = len(unique_countries)
+
+    if country_code:
+        total_retained_users_with_emails = sum(
+            1 for entity, _ in filtered_entities if entity.email_hash is not None
+        )
+    else:
+        total_retained_users_with_emails = (
+            query.select(fn.COUNT(Entity.eid))
+            .where(Entity.email_hash.is_null(False))
+            .scalar()
+        )
     result = []
     total_records = 0
 
@@ -401,6 +425,7 @@ def get_retained_users(filters=None, group_by=None, options=None):
         "pagination": pagination,
         "total_retained_users": total_retained_users,
         "total_retained_users_with_tokens": total_retained_users_with_tokens,
+        "total_retained_users_with_emails": total_retained_users_with_emails,
         "total_countries": total_countries,
         "countries": list(unique_countries),
     }

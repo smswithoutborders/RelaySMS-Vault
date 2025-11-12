@@ -1,0 +1,8 @@
+[
+  {
+    "action": "add_column",
+    "table": "signups",
+    "column_name": "auth_method",
+    "field": "CharField(null=True, constraints=[SQL(\"DEFAULT 'phone_number'\")])"
+  }
+]
