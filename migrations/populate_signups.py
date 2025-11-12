@@ -7,7 +7,7 @@ Public License was not distributed with this file, see <https://www.gnu.org/lice
 from peewee import fn
 from playhouse.shortcuts import chunked
 from tqdm import tqdm
-from src.utils import decrypt_and_decode
+from src.utils import decode_and_decrypt
 from src.db_models import Entity, Signups
 from base_logger import get_logger
 
@@ -29,7 +29,7 @@ def process_batch(entities_batch):
     for entity in entities_batch:
         processed_batch.append(
             {
-                "country_code": decrypt_and_decode(entity.country_code),
+                "country_code": decode_and_decrypt(entity.country_code),
                 "source": entity.source,
                 "date_created": entity.date_created,
             }

@@ -4,7 +4,9 @@ Module for handling encryption, decryption, encoding, and decoding of RelaySMS p
 
 import base64
 import struct
-from smswithoutborders_libsig.ratchets import Ratchets, States, HEADERS
+
+from smswithoutborders_libsig.ratchets import HEADERS, Ratchets, States
+
 from base_logger import get_logger
 
 logger = get_logger(__name__)

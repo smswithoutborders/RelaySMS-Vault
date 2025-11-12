@@ -18,7 +18,7 @@ from src.utils import (
     load_key,
     generate_keypair_and_public_key,
     get_shared_key,
-    decrypt_and_decode,
+    decode_and_decrypt,
 )
 from src.crypto import generate_hmac
 
@@ -305,7 +305,7 @@ def test_entity_complete_creation_success(grpc_server_mock):
 
     # Decrypt and decode server crypto metadata
     server_crypto_metadata = load_crypto_metadata(
-        decrypt_and_decode(entity_obj.server_crypto_metadata)
+        decode_and_decrypt(entity_obj.server_crypto_metadata)
     )
     server_publish_keypair = server_crypto_metadata.publish_keypair
     server_device_id_keypair = server_crypto_metadata.device_id_keypair

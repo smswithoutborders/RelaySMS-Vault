@@ -3,8 +3,8 @@
 
 import base64
 import re
-import traceback
 import threading
+import traceback
 import weakref
 
 import grpc
@@ -12,38 +12,36 @@ import phonenumbers
 
 import vault_pb2
 import vault_pb2_grpc
-
+from base_logger import get_logger
 from src import signups
+from src.db_models import StaticKeypairs
 from src.entity import create_entity, find_entity
-from src.tokens import fetch_entity_tokens, create_entity_token, find_token
-from src.crypto import generate_hmac, decrypt_aes
-from src.otp_service import send_otp, verify_otp, create_inapp_otp
-from src.utils import (
-    load_key,
-    get_configs,
-    encrypt_and_encode,
-    decrypt_and_decode,
-    load_keypair_object,
-    get_supported_platforms,
-    is_valid_x25519_public_key,
-    generate_eid,
-    clear_keystore,
-    generate_keypair_and_public_key,
-)
 from src.long_lived_token import verify_llt
+from src.otp_service import create_inapp_otp, send_otp, verify_otp
 from src.relaysms_payload import (
     decode_relay_sms_payload,
     decrypt_payload,
-    encrypt_payload,
     encode_relay_sms_payload,
+    encrypt_payload,
 )
-from src.db_models import StaticKeypairs
-from base_logger import get_logger
+from src.tokens import create_entity_token, fetch_entity_tokens, find_token
+from src.utils import (
+    clear_keystore,
+    decode_and_decrypt,
+    decrypt_and_deserialize,
+    decrypt_data,
+    encrypt_and_encode,
+    generate_eid,
+    generate_keypair_and_public_key,
+    get_configs,
+    get_supported_platforms,
+    hash_data,
+    is_valid_x25519_public_key,
+    serialize_and_encrypt,
+)
 
 logger = get_logger(__name__)
 
-ENCRYPTION_KEY = load_key(get_configs("SHARED_KEY", strict=True), 32)
-HASHING_KEY = load_key(get_configs("HASHING_SALT", strict=True), 32)
 SUPPORTED_PLATFORMS = get_supported_platforms()
 MOCK_OTP = (get_configs("MOCK_OTP", default_value="true") or "").lower() == "true"
 DEFAULT_LANGUAGE = "en"
@@ -199,7 +197,9 @@ class EntityInternalService(vault_pb2_grpc.EntityInternalServicer):
             return entity_obj, None
 
         def validate_long_lived_token(llt, entity_obj):
-            entity_device_id_keypair = load_keypair_object(entity_obj.device_id_keypair)
+            entity_device_id_keypair = decrypt_and_deserialize(
+                entity_obj.device_id_keypair
+            )
             entity_device_id_shared_key = entity_device_id_keypair.agree(
                 base64.b64decode(entity_obj.client_device_id_pub_key),
             )
@@ -278,7 +278,7 @@ class EntityInternalService(vault_pb2_grpc.EntityInternalServicer):
                 )
 
             account_identifier = request.account_identifier.strip()
-            account_identifier_hash = generate_hmac(HASHING_KEY, account_identifier)
+            account_identifier_hash = hash_data(account_identifier)
 
             existing_token = check_existing_token(
                 entity_obj.eid, account_identifier_hash
@@ -295,7 +295,7 @@ class EntityInternalService(vault_pb2_grpc.EntityInternalServicer):
                 "account_tokens": encrypt_and_encode(request.token),
             }
             create_entity_token(**new_token)
-            logger.info("Successfully stored tokens for %s", entity_obj.eid)
+            logger.info("Successfully stored tokens.")
 
             return response(
                 message="Token stored successfully.",
@@ -351,13 +351,19 @@ class EntityInternalService(vault_pb2_grpc.EntityInternalServicer):
             return (header, content_ciphertext), None
 
         def decrypt_message(entity_obj, header, content_ciphertext):
-            publish_keypair = load_keypair_object(entity_obj.publish_keypair)
+            publish_keypair = decrypt_and_deserialize(entity_obj.publish_keypair)
             publish_shared_key = publish_keypair.agree(
                 base64.b64decode(entity_obj.client_publish_pub_key)
             )
 
+            decrypted_state = (
+                decrypt_data(entity_obj.server_state)
+                if entity_obj.server_state
+                else None
+            )
+
             content_plaintext, state, decrypt_error = decrypt_payload(
-                server_state=entity_obj.server_state,
+                server_state=decrypted_state,
                 publish_shared_key=publish_shared_key,
                 publish_keypair=publish_keypair,
                 ratchet_header=header,
@@ -375,18 +381,15 @@ class EntityInternalService(vault_pb2_grpc.EntityInternalServicer):
                     error_type="UNKNOWN",
                 )
 
-            entity_obj.server_state = state.serialize()
+            entity_obj.server_state = serialize_and_encrypt(state)
             entity_obj.save(only=["server_state"])
-            logger.info(
-                "Successfully decrypted payload for %s",
-                entity_obj.eid,
-            )
+            logger.info("Successfully decrypted payload.")
 
             return response(
                 message="Successfully decrypted payload",
                 success=True,
                 payload_plaintext=base64.b64encode(content_plaintext).decode("utf-8"),
-                country_code=decrypt_and_decode(entity_obj.country_code),
+                country_code=decode_and_decrypt(entity_obj.country_code),
             )
 
         try:
@@ -405,7 +408,7 @@ class EntityInternalService(vault_pb2_grpc.EntityInternalServicer):
                         grpc.StatusCode.UNAUTHENTICATED,
                     )
             else:
-                phone_number_hash = generate_hmac(HASHING_KEY, request.phone_number)
+                phone_number_hash = hash_data(request.phone_number)
                 entity_obj = find_entity(phone_number_hash=phone_number_hash)
                 if not entity_obj:
                     return self.handle_create_grpc_error_response(
@@ -457,8 +460,14 @@ class EntityInternalService(vault_pb2_grpc.EntityInternalServicer):
             )
 
         def encrypt_message(entity_obj):
+            decrypted_state = (
+                decrypt_data(entity_obj.server_state)
+                if entity_obj.server_state
+                else None
+            )
+
             header, content_ciphertext, state, encrypt_error = encrypt_payload(
-                server_state=entity_obj.server_state,
+                server_state=decrypted_state,
                 client_publish_pub_key=base64.b64decode(
                     entity_obj.client_publish_pub_key
                 ),
@@ -492,12 +501,9 @@ class EntityInternalService(vault_pb2_grpc.EntityInternalServicer):
                     error_type="UNKNOWN",
                 )
 
-            entity_obj.server_state = state.serialize()
+            entity_obj.server_state = serialize_and_encrypt(state)
             entity_obj.save(only=["server_state"])
-            logger.info(
-                "Successfully encrypted payload for %s",
-                entity_obj.eid,
-            )
+            logger.info("Successfully encrypted payload.")
 
             return response(
                 message="Successfully encrypted payload.",
@@ -521,7 +527,7 @@ class EntityInternalService(vault_pb2_grpc.EntityInternalServicer):
                         grpc.StatusCode.UNAUTHENTICATED,
                     )
             else:
-                phone_number_hash = generate_hmac(HASHING_KEY, request.phone_number)
+                phone_number_hash = hash_data(request.phone_number)
                 entity_obj = find_entity(phone_number_hash=phone_number_hash)
                 if not entity_obj:
                     return self.handle_create_grpc_error_response(
@@ -578,12 +584,9 @@ class EntityInternalService(vault_pb2_grpc.EntityInternalServicer):
             for token in tokens:
                 for field in ["account_tokens"]:
                     if field in token:
-                        token[field] = decrypt_and_decode(token[field])
+                        token[field] = decode_and_decrypt(token[field])
 
-            logger.info(
-                "Successfully fetched tokens for %s",
-                entity_obj.eid,
-            )
+            logger.info("Successfully fetched tokens.")
 
             if not tokens:
                 return self.handle_create_grpc_error_response(
@@ -623,7 +626,7 @@ class EntityInternalService(vault_pb2_grpc.EntityInternalServicer):
                         grpc.StatusCode.UNAUTHENTICATED,
                     )
             else:
-                phone_number_hash = generate_hmac(HASHING_KEY, request.phone_number)
+                phone_number_hash = hash_data(request.phone_number)
                 entity_obj = find_entity(phone_number_hash=phone_number_hash)
                 if not entity_obj:
                     return self.handle_create_grpc_error_response(
@@ -642,7 +645,7 @@ class EntityInternalService(vault_pb2_grpc.EntityInternalServicer):
                 )
 
             account_identifier = request.account_identifier.strip()
-            account_identifier_hash = generate_hmac(HASHING_KEY, account_identifier)
+            account_identifier_hash = hash_data(account_identifier)
 
             return fetch_tokens(entity_obj, account_identifier_hash)
 
@@ -695,7 +698,7 @@ class EntityInternalService(vault_pb2_grpc.EntityInternalServicer):
                         grpc.StatusCode.UNAUTHENTICATED,
                     )
             else:
-                phone_number_hash = generate_hmac(HASHING_KEY, request.phone_number)
+                phone_number_hash = hash_data(request.phone_number)
                 entity_obj = find_entity(phone_number_hash=phone_number_hash)
                 if not entity_obj:
                     return self.handle_create_grpc_error_response(
@@ -707,7 +710,7 @@ class EntityInternalService(vault_pb2_grpc.EntityInternalServicer):
                     )
 
             account_identifier = request.account_identifier.strip()
-            account_identifier_hash = generate_hmac(HASHING_KEY, account_identifier)
+            account_identifier_hash = hash_data(account_identifier)
 
             existing_tokens = fetch_entity_tokens(
                 entity=entity_obj,
@@ -726,7 +729,7 @@ class EntityInternalService(vault_pb2_grpc.EntityInternalServicer):
 
             existing_tokens[0].account_tokens = encrypt_and_encode(request.token)
             existing_tokens[0].save(only=["account_tokens"])
-            logger.info("Successfully updated token for %s", entity_obj.eid)
+            logger.info("Successfully updated token.")
 
             return response(
                 message="Token updated successfully.",
@@ -772,7 +775,7 @@ class EntityInternalService(vault_pb2_grpc.EntityInternalServicer):
                 )
 
             account_identifier = request.account_identifier.strip()
-            account_identifier_hash = generate_hmac(HASHING_KEY, account_identifier)
+            account_identifier_hash = hash_data(account_identifier)
 
             existing_tokens = fetch_entity_tokens(
                 entity=entity_obj,
@@ -791,7 +794,7 @@ class EntityInternalService(vault_pb2_grpc.EntityInternalServicer):
 
             existing_tokens[0].delete_instance()
 
-            logger.info("Successfully deleted token for %s", entity_obj.eid)
+            logger.info("Successfully deleted token.")
 
             return response(
                 message="Token deleted successfully.",
@@ -861,7 +864,9 @@ class EntityInternalService(vault_pb2_grpc.EntityInternalServicer):
 
             if entity_obj:
                 entity_obj.client_publish_pub_key = request.client_publish_pub_key
-                entity_obj.publish_keypair = entity_publish_keypair.serialize()
+                entity_obj.publish_keypair = serialize_and_encrypt(
+                    entity_publish_keypair
+                )
                 entity_obj.server_state = None
                 entity_obj.save(
                     only=["client_publish_pub_key", "publish_keypair", "server_state"]
@@ -873,7 +878,7 @@ class EntityInternalService(vault_pb2_grpc.EntityInternalServicer):
                     "password_hash": None,
                     "country_code": country_code_ciphertext_b64,
                     "client_publish_pub_key": request.client_publish_pub_key,
-                    "publish_keypair": entity_publish_keypair.serialize(),
+                    "publish_keypair": serialize_and_encrypt(entity_publish_keypair),
                     "is_bridge_enabled": False,
                 }
 
@@ -907,7 +912,9 @@ class EntityInternalService(vault_pb2_grpc.EntityInternalServicer):
                 sms_count,
             )
 
-            success, message, _ = send_otp(request.phone_number, message_body)
+            success, message, _ = send_otp(
+                request.phone_number, message_body=message_body
+            )
 
             if not success:
                 return self.handle_create_grpc_error_response(
@@ -952,17 +959,13 @@ class EntityInternalService(vault_pb2_grpc.EntityInternalServicer):
                     grpc.StatusCode.NOT_FOUND,
                 )
 
-            server_publish_keypair_plaintext = decrypt_aes(
-                ENCRYPTION_KEY,
-                server_publish_keypair.keypair_bytes,
-                is_bytes=True,
+            server_publish_keypair_obj = decrypt_and_deserialize(
+                server_publish_keypair.keypair_bytes
             )
             if entity_obj:
-                new_server_pub_key = load_keypair_object(
-                    server_publish_keypair_plaintext
-                ).get_public_key()
+                new_server_pub_key = server_publish_keypair_obj.get_public_key()
                 current_server_pub_key = (
-                    load_keypair_object(entity_obj.publish_keypair).get_public_key()
+                    decrypt_and_deserialize(entity_obj.publish_keypair).get_public_key()
                     if entity_obj.publish_keypair
                     else None
                 )
@@ -975,7 +978,9 @@ class EntityInternalService(vault_pb2_grpc.EntityInternalServicer):
                     )
                     clear_keystore(eid)
                     entity_obj.client_publish_pub_key = request.client_publish_pub_key
-                    entity_obj.publish_keypair = server_publish_keypair_plaintext
+                    entity_obj.publish_keypair = serialize_and_encrypt(
+                        server_publish_keypair_obj
+                    )
                     entity_obj.server_state = None
                     entity_obj.is_bridge_enabled = True
                     entity_obj.language = request.language or DEFAULT_LANGUAGE
@@ -1006,7 +1011,7 @@ class EntityInternalService(vault_pb2_grpc.EntityInternalServicer):
                 password_hash=None,
                 country_code=encrypt_and_encode(request.country_code),
                 client_publish_pub_key=request.client_publish_pub_key,
-                publish_keypair=server_publish_keypair_plaintext,
+                publish_keypair=serialize_and_encrypt(server_publish_keypair_obj),
                 is_bridge_enabled=True,
                 language=request.language or DEFAULT_LANGUAGE,
             )
@@ -1029,7 +1034,7 @@ class EntityInternalService(vault_pb2_grpc.EntityInternalServicer):
             if invalid_fields_response:
                 return invalid_fields_response
 
-            phone_number_hash = generate_hmac(HASHING_KEY, request.phone_number)
+            phone_number_hash = hash_data(request.phone_number)
             entity_obj = find_entity(phone_number_hash=phone_number_hash)
 
             eid = generate_eid(phone_number_hash)
@@ -1064,7 +1069,7 @@ class EntityInternalService(vault_pb2_grpc.EntityInternalServicer):
             if invalid_fields_response:
                 return invalid_fields_response
 
-            phone_number_hash = generate_hmac(HASHING_KEY, request.phone_number)
+            phone_number_hash = hash_data(request.phone_number)
             entity_obj = find_entity(phone_number_hash=phone_number_hash)
 
             if not entity_obj:
