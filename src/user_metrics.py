@@ -102,7 +102,7 @@ def get_signup_users(filters=None, group_by=None, options=None):
 
     total_signup_users = query.select(fn.COUNT(Signups.id)).scalar()
     total_countries = query.select(
-        fn.COUNT(fn.DISTINCT(fn.LOWER(Signups.country_code)))
+        fn.COUNT(fn.DISTINCT(fn.UPPER(Signups.country_code)))
     ).scalar()
     total_signups_from_bridges = (
         query.select(fn.COUNT(Signups.id)).where(Signups.source == "bridges").scalar()
@@ -113,7 +113,7 @@ def get_signup_users(filters=None, group_by=None, options=None):
         .scalar()
     )
 
-    countries_query = query.select(fn.LOWER(Signups.country_code).distinct())
+    countries_query = query.select(fn.UPPER(Signups.country_code).distinct())
     countries = [row.country_code for row in countries_query]
 
     if group_by is None:
@@ -317,7 +317,7 @@ def get_retained_users(filters=None, group_by=None, options=None):
     for entity, decrypted_country in decrypted_rows:
         filtered_entities.append((entity, decrypted_country))
         unique_countries.add(
-            decrypted_country.lower() if decrypted_country else decrypted_country
+            decrypted_country.upper() if decrypted_country else decrypted_country
         )
 
     total_retained_users = len(filtered_entities)
