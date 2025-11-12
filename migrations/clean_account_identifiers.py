@@ -5,7 +5,7 @@ Script to clean and rehash account identifiers in tokens.
 import tqdm
 from src.db_models import Token
 from src.crypto import generate_hmac
-from src.utils import decrypt_and_decode, encrypt_and_encode, load_key, get_configs
+from src.utils import decode_and_decrypt, encrypt_and_encode, load_key, get_configs
 from base_logger import get_logger
 
 HASHING_KEY = load_key(get_configs("HASHING_SALT"), 32)
@@ -27,7 +27,7 @@ def process_token(token, pbar):
         pbar: The tqdm progress bar to update.
     """
     try:
-        account_identifier = decrypt_and_decode(token.account_identifier)
+        account_identifier = decode_and_decrypt(token.account_identifier)
         account_identifier_hash = token.account_identifier
 
         clean_account_identifier = account_identifier.strip('"').strip()

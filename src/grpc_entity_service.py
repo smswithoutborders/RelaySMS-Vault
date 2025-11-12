@@ -2,10 +2,10 @@
 """gRPC Entity Service"""
 
 import base64
-import re
-import traceback
 import json
+import re
 import threading
+import traceback
 import weakref
 
 import grpc
@@ -13,38 +13,35 @@ import phonenumbers
 
 import vault_pb2
 import vault_pb2_grpc
-
+from base_logger import get_logger
 from src import signups
-from src.entity import create_entity, find_entity
-from src.tokens import fetch_entity_tokens, update_entity_tokens
-from src.crypto import generate_hmac, verify_hmac
-from src.otp_service import send_otp, verify_otp, ContactType, OTPAction
-from src.recaptcha import is_captcha_enabled, verify_captcha
-from src.utils import (
-    load_key,
-    get_configs,
-    encrypt_and_encode,
-    generate_keypair_and_public_key,
-    generate_eid,
-    is_valid_x25519_public_key,
-    decrypt_and_decode,
-    load_keypair_object,
-    clear_keystore,
-    get_platforms_by_protocol_type,
-)
-from src.long_lived_token import generate_llt, verify_llt
 from src.device_id import compute_device_id
-from src.password_validation import validate_password_strength
+from src.entity import create_entity, find_entity
+from src.long_lived_token import generate_llt, verify_llt
+from src.otp_service import ContactType, OTPAction, send_otp, verify_otp
 from src.password_rate_limit import (
-    is_rate_limited,
     clear_rate_limit,
+    is_rate_limited,
     register_password_attempt,
 )
-from base_logger import get_logger
+from src.password_validation import validate_password_strength
+from src.recaptcha import is_captcha_enabled, verify_captcha
+from src.tokens import fetch_entity_tokens, update_entity_tokens
+from src.utils import (
+    clear_keystore,
+    decode_and_decrypt,
+    decrypt_and_deserialize,
+    encrypt_and_encode,
+    generate_eid,
+    generate_keypair_and_public_key,
+    get_platforms_by_protocol_type,
+    hash_data,
+    is_valid_x25519_public_key,
+    serialize_and_encrypt,
+    verify_hash,
+)
 
 logger = get_logger(__name__)
-
-HASHING_KEY = load_key(get_configs("HASHING_SALT", strict=True), 32)
 
 
 class EntityService(vault_pb2_grpc.EntityServicer):
@@ -58,7 +55,7 @@ class EntityService(vault_pb2_grpc.EntityServicer):
     @classmethod
     def _get_entity_lock(cls, identifier: str) -> threading.Lock:
         """Get or create a lock for a specific entity using hashed identifier."""
-        identifier_hash = generate_hmac(HASHING_KEY, identifier)
+        identifier_hash = hash_data(identifier)
         with cls._locks_lock:
             lock = cls._entity_locks.get(identifier_hash)
             if lock is None:
@@ -281,7 +278,9 @@ class EntityService(vault_pb2_grpc.EntityServicer):
                     "Entity's device ID keypair is missing. Should re-authenticate."
                 )
 
-            entity_device_id_keypair = load_keypair_object(entity_obj.device_id_keypair)
+            entity_device_id_keypair = decrypt_and_deserialize(
+                entity_obj.device_id_keypair
+            )
 
             if not entity_device_id_keypair:
                 return None, create_error_response(
@@ -351,9 +350,9 @@ class EntityService(vault_pb2_grpc.EntityServicer):
                 return pow_response
 
             identifier_type, identifier_value = self.get_identifier(request)
-            identifier_hash = generate_hmac(HASHING_KEY, identifier_value)
+            identifier_hash = hash_data(identifier_value)
             eid = generate_eid(identifier_hash)
-            password_hash = generate_hmac(HASHING_KEY, request.password)
+            password_hash = hash_data(request.password)
             country_code_ciphertext_b64 = encrypt_and_encode(request.country_code)
 
             clear_keystore(eid)
@@ -381,8 +380,8 @@ class EntityService(vault_pb2_grpc.EntityServicer):
                 ),
                 "client_publish_pub_key": request.client_publish_pub_key,
                 "client_device_id_pub_key": request.client_device_id_pub_key,
-                "publish_keypair": entity_publish_keypair.serialize(),
-                "device_id_keypair": entity_device_id_keypair.serialize(),
+                "publish_keypair": serialize_and_encrypt(entity_publish_keypair),
+                "device_id_keypair": serialize_and_encrypt(entity_device_id_keypair),
             }
             if identifier_type == ContactType.EMAIL:
                 fields["email_hash"] = identifier_hash
@@ -475,11 +474,11 @@ class EntityService(vault_pb2_grpc.EntityServicer):
             identifier_type, identifier_value = self.get_identifier(request)
             if identifier_type == ContactType.EMAIL:
                 email_address = identifier_value
-                email_address_hash = generate_hmac(HASHING_KEY, email_address)
+                email_address_hash = hash_data(email_address)
                 entity_obj = find_entity(email_hash=email_address_hash)
             else:
                 phone_number = identifier_value
-                phone_number_hash = generate_hmac(HASHING_KEY, phone_number)
+                phone_number_hash = hash_data(phone_number)
                 entity_obj = find_entity(phone_number_hash=phone_number_hash)
 
             if entity_obj:
@@ -528,7 +527,7 @@ class EntityService(vault_pb2_grpc.EntityServicer):
                     message="Please reset your password to continue.",
                 )
 
-            if not verify_hmac(HASHING_KEY, request.password, entity_obj.password_hash):
+            if not verify_hash(request.password, entity_obj.password_hash):
                 register_password_attempt(entity_obj.eid)
                 return self.handle_create_grpc_error_response(
                     context,
@@ -603,8 +602,10 @@ class EntityService(vault_pb2_grpc.EntityServicer):
             )
             entity_obj.client_publish_pub_key = request.client_publish_pub_key
             entity_obj.client_device_id_pub_key = request.client_device_id_pub_key
-            entity_obj.publish_keypair = entity_publish_keypair.serialize()
-            entity_obj.device_id_keypair = entity_device_id_keypair.serialize()
+            entity_obj.publish_keypair = serialize_and_encrypt(entity_publish_keypair)
+            entity_obj.device_id_keypair = serialize_and_encrypt(
+                entity_device_id_keypair
+            )
             entity_obj.save(
                 only=[
                     "device_id",
@@ -647,11 +648,11 @@ class EntityService(vault_pb2_grpc.EntityServicer):
             identifier_type, identifier_value = self.get_identifier(request)
             if identifier_type == ContactType.EMAIL:
                 email_address = identifier_value
-                email_address_hash = generate_hmac(HASHING_KEY, email_address)
+                email_address_hash = hash_data(email_address)
                 entity_obj = find_entity(email_hash=email_address_hash)
             else:
                 phone_number = identifier_value
-                phone_number_hash = generate_hmac(HASHING_KEY, phone_number)
+                phone_number_hash = hash_data(phone_number)
                 entity_obj = find_entity(phone_number_hash=phone_number_hash)
 
             if not entity_obj:
@@ -708,7 +709,7 @@ class EntityService(vault_pb2_grpc.EntityServicer):
             for token in tokens:
                 for field in fields_to_decrypt:
                     if field in token:
-                        token[field] = decrypt_and_decode(token[field])
+                        token[field] = decode_and_decrypt(token[field])
 
                 account_tokens = json.loads(token["account_tokens"])
 
@@ -726,9 +727,8 @@ class EntityService(vault_pb2_grpc.EntityServicer):
                         for key in ["access_token", "refresh_token", "id_token"]
                     }
                     if account_tokens != original_account_tokens:
-                        account_identifier_hash = generate_hmac(
-                            HASHING_KEY,
-                            token.get("account_identifier"),
+                        account_identifier_hash = hash_data(
+                            token.get("account_identifier")
                         )
 
                         update_entity_tokens(
@@ -779,7 +779,7 @@ class EntityService(vault_pb2_grpc.EntityServicer):
             for token in stored_tokens:
                 for field in ["account_identifier"]:
                     if field in token:
-                        token[field] = decrypt_and_decode(token[field])
+                        token[field] = decode_and_decrypt(token[field])
 
             if stored_tokens:
                 token_info = [
@@ -829,7 +829,7 @@ class EntityService(vault_pb2_grpc.EntityServicer):
             entity_obj.delete_instance()
             clear_keystore(entity_obj.eid.hex)
 
-            logger.info("Successfully deleted entity %s", entity_obj.eid)
+            logger.info("Successfully deleted entity.")
 
             return response(
                 message="Entity deleted successfully.",
@@ -889,7 +889,7 @@ class EntityService(vault_pb2_grpc.EntityServicer):
                 return pow_response
 
             eid = entity_obj.eid.hex
-            password_hash = generate_hmac(HASHING_KEY, request.new_password)
+            password_hash = hash_data(request.new_password)
 
             clear_keystore(eid)
             entity_publish_keypair, entity_publish_pub_key = (
@@ -914,8 +914,10 @@ class EntityService(vault_pb2_grpc.EntityServicer):
             )
             entity_obj.client_publish_pub_key = request.client_publish_pub_key
             entity_obj.client_device_id_pub_key = request.client_device_id_pub_key
-            entity_obj.publish_keypair = entity_publish_keypair.serialize()
-            entity_obj.device_id_keypair = entity_device_id_keypair.serialize()
+            entity_obj.publish_keypair = serialize_and_encrypt(entity_publish_keypair)
+            entity_obj.device_id_keypair = serialize_and_encrypt(
+                entity_device_id_keypair
+            )
             entity_obj.save(
                 only=[
                     "password_hash",
@@ -972,11 +974,11 @@ class EntityService(vault_pb2_grpc.EntityServicer):
             identifier_type, identifier_value = self.get_identifier(request)
             if identifier_type == ContactType.EMAIL:
                 email_address = identifier_value
-                email_address_hash = generate_hmac(HASHING_KEY, email_address)
+                email_address_hash = hash_data(email_address)
                 entity_obj = find_entity(email_hash=email_address_hash)
             else:
                 phone_number = identifier_value
-                phone_number_hash = generate_hmac(HASHING_KEY, phone_number)
+                phone_number_hash = hash_data(phone_number)
                 entity_obj = find_entity(phone_number_hash=phone_number_hash)
 
             if not entity_obj:
@@ -1051,9 +1053,7 @@ class EntityService(vault_pb2_grpc.EntityServicer):
                     grpc.StatusCode.UNAVAILABLE,
                 )
 
-            if not verify_hmac(
-                HASHING_KEY, request.current_password, entity_obj.password_hash
-            ):
+            if not verify_hash(request.current_password, entity_obj.password_hash):
                 register_password_attempt(entity_obj.eid)
                 return self.handle_create_grpc_error_response(
                     context,
@@ -1063,7 +1063,7 @@ class EntityService(vault_pb2_grpc.EntityServicer):
                 )
 
             clear_rate_limit(entity_obj.eid)
-            new_password_hash = generate_hmac(HASHING_KEY, request.new_password)
+            new_password_hash = hash_data(request.new_password)
 
             entity_obj.password_hash = new_password_hash
             entity_obj.device_id = None
@@ -1071,7 +1071,16 @@ class EntityService(vault_pb2_grpc.EntityServicer):
             entity_obj.client_device_id_pub_key = None
             entity_obj.publish_keypair = None
             entity_obj.device_id_keypair = None
-            entity_obj.save()
+            entity_obj.save(
+                only=[
+                    "password_hash",
+                    "device_id",
+                    "client_publish_pub_key",
+                    "client_device_id_pub_key",
+                    "publish_keypair",
+                    "device_id_keypair",
+                ]
+            )
 
             return response(message="Password updated successfully.", success=True)
 

@@ -1,45 +1,41 @@
-"""Utitlies Module."""
+# SPDX-License-Identifier: GPL-3.0-only
+"""Utilities module."""
 
-import os
-import uuid
 import base64
-import re
 import json
+import os
+import re
+import uuid
 from datetime import datetime, timedelta
 from functools import wraps
+from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 
-from cryptography.hazmat.primitives.asymmetric import x25519 as x25519_core
 import mysql.connector
+from cryptography.hazmat.primitives.asymmetric import x25519 as x25519_core
 from peewee import DatabaseError
 from smswithoutborders_libsig.keypairs import x25519
 
-from src.crypto import encrypt_aes, decrypt_aes
 from base_logger import get_logger
+from src.crypto import decrypt_aes, encrypt_aes, generate_hmac, verify_hmac
 
 SUPPORTED_PLATFORM_FILE_PATH = "platforms.json"
 
 logger = get_logger(__name__)
 
 
-def load_key(filepath, key_length):
-    """
-    Load a key from a file.
-
-    This function reads the first line from the specified
-    file and returns the specified number of characters
-    from that line, encoded as bytes.
+def load_key(filepath: str, key_length: int) -> bytes:
+    """Load key from file and return first key_length characters as bytes.
 
     Args:
-        filepath (str): The path to the file containing the key.
-        key_length (int): The number of characters to load from the first line.
+        filepath: Path to the key file.
+        key_length: Number of characters to load.
 
     Returns:
-        bytes: The specified number of characters from the first line in the file
-            encoded as bytes.
+        Key bytes.
 
     Raises:
-        FileNotFoundError: If the file does not exist at the specified filepath.
-        Exception: If an unexpected error occurs during file reading.
+        FileNotFoundError: If file doesn't exist.
+        Exception: If unexpected error occurs.
     """
     try:
         with open(filepath, "r", encoding="utf-8") as f:
@@ -56,13 +52,11 @@ def load_key(filepath, key_length):
         raise
 
 
-def create_tables(models):
-    """
-    Creates tables for the given models if they don't
-        exist in their specified database.
+def create_tables(models: List[Any]) -> None:
+    """Create tables for given Peewee models if they don't exist.
 
     Args:
-        models(list): A list of Peewee Model classes.
+        models: List of Peewee Model classes.
     """
     if not models:
         logger.warning("No models provided for table creation.")
@@ -98,21 +92,22 @@ def create_tables(models):
         logger.error("An error occurred while creating tables: %s", e)
 
 
-def ensure_database_exists(host, user, password, database_name):
-    """
-    Decorator that ensures a MySQL database exists before executing a function.
+def ensure_database_exists(
+    host: str, user: str, password: str, database_name: str
+) -> Callable:
+    """Decorator to ensure MySQL database exists before function execution.
 
     Args:
-        host (str): The host address of the MySQL server.
-        user (str): The username for connecting to the MySQL server.
-        password (str): The password for connecting to the MySQL server.
-        database_name (str): The name of the database to ensure existence.
+        host: MySQL server host address.
+        user: MySQL username.
+        password: MySQL password.
+        database_name: Database name.
 
     Returns:
-        function: Decorated function.
+        Decorated function.
     """
 
-    def decorator(func):
+    def decorator(func: Callable) -> Callable:
         @wraps(func)
         def wrapper(*args, **kwargs):
             try:
@@ -137,24 +132,20 @@ def ensure_database_exists(host, user, password, database_name):
     return decorator
 
 
-def get_configs(config_name, strict=False, default_value: str = "") -> str:
-    """
-    Retrieves the value of a configuration from the environment variables.
+def get_configs(config_name: str, strict: bool = False, default_value: str = "") -> str:
+    """Retrieve configuration from environment variables.
 
     Args:
-        config_name (str): The name of the configuration to retrieve.
-        strict (bool): If True, raises an error if the configuration
-            is not found. Default is False.
-        default_value (str): The default value to return if the configuration
-            is not found and strict is False. Default is None.
+        config_name: Configuration name.
+        strict: If True, raises error if not found.
+        default_value: Default value if not found and not strict.
 
     Returns:
-        str: The value of the configuration, or default_value if not found and s
-            trict is False.
+        Configuration value.
 
     Raises:
-        KeyError: If the configuration is not found and strict is True.
-        ValueError: If the configuration value is empty and strict is True.
+        KeyError: If strict is True and config not found.
+        ValueError: If strict is True and value is empty.
     """
     try:
         value = (
@@ -178,10 +169,14 @@ def get_configs(config_name, strict=False, default_value: str = "") -> str:
 
 
 def get_bool_config(key: str, default_value: bool = False) -> bool:
-    """
-    Retrieve a configuration value and interpret it as a boolean.
-    Accepts "true", "1", "yes", "on" as True; "false", "0", "no", "off" as False.
-    Case-insensitive. Falls back to `default` if missing or invalid.
+    """Retrieve config value as boolean.
+
+    Args:
+        key: Configuration key.
+        default_value: Default if missing or invalid.
+
+    Returns:
+        Boolean value.
     """
     value = get_configs(key)
     if value is None:
@@ -195,8 +190,16 @@ def get_bool_config(key: str, default_value: bool = False) -> bool:
     return default_value
 
 
-def get_list_config(key: str, default_value: list[str] | None = None) -> list[str]:
-    """Retrieve a configuration value and interpret it as a list of strings."""
+def get_list_config(key: str, default_value: Optional[List[str]] = None) -> List[str]:
+    """Retrieve config value as list of strings.
+
+    Args:
+        key: Configuration key.
+        default_value: Default if missing.
+
+    Returns:
+        List of strings.
+    """
     value = get_configs(key)
     if not value:
         return default_value or []
@@ -205,13 +208,12 @@ def get_list_config(key: str, default_value: list[str] | None = None) -> list[st
     return [c.strip().strip("'\"").upper() for c in items.split(",") if c.strip()]
 
 
-def set_configs(config_name, config_value) -> None:
-    """
-    Sets the value of a configuration in the environment variables.
+def set_configs(config_name: str, config_value: Any) -> None:
+    """Set environment variable configuration.
 
     Args:
-        config_name (str): The name of the configuration to set.
-        config_value (str or bool): The value of the configuration to set.
+        config_name: Configuration name.
+        config_value: Configuration value.
 
     Raises:
         ValueError: If config_name is empty.
@@ -232,33 +234,30 @@ def set_configs(config_name, config_value) -> None:
         raise
 
 
-def generate_eid(identifier_hash, namespace=uuid.NAMESPACE_DNS):
-    """
-    Generate a UUID based on an identifier hash using UUID5.
+def generate_eid(
+    identifier_hash: str, namespace: uuid.UUID = uuid.NAMESPACE_DNS
+) -> str:
+    """Generate UUID5 from identifier hash.
 
-    Parameters:
-    - identifier_hash (str): The hash of the identifier (phone number or email).
-    - namespace (uuid.UUID): The namespace identifier. Defaults to uuid.NAMESPACE_DNS.
+    Args:
+        identifier_hash: Hash of identifier (phone/email).
+        namespace: UUID namespace.
 
     Returns:
-    - str: The hexadecimal representation of the generated UUID.
+        Hex representation of generated UUID.
     """
     return uuid.uuid5(namespace, identifier_hash).hex
 
 
-def generate_keypair_and_public_key(eid, keystore_name):
-    """
-    Generate keypair and public key.
+def generate_keypair_and_public_key(eid: str, keystore_name: str) -> Tuple[Any, bytes]:
+    """Generate X25519 keypair and public key.
 
     Args:
-        eid (str): The unique identifier for the entity.
-        keystore_name (str): The name of the keystore file where the keypair
-            will be stored.
+        eid: Unique entity identifier.
+        keystore_name: Keystore file name.
 
     Returns:
-        tuple: A tuple containing:
-            - keypair_obj: The keypair object generated by the x25519 algorithm.
-            - peer_pub_key: The public key associated with the generated keypair.
+        Tuple of (keypair_object, public_key).
     """
     keystore_path = get_configs("KEYSTORE_PATH")
     file_path = os.path.join(keystore_path, f"{eid}_{keystore_name}.db")
@@ -267,46 +266,45 @@ def generate_keypair_and_public_key(eid, keystore_name):
     return keypair_obj, peer_pub_key
 
 
-def load_keypair_object(keypair):
-    """
-    Deserialize a serialized x25519 keypair object from bytes.
+def deserialize_keypair(keypair: bytes) -> Any:
+    """Deserialize X25519 keypair from bytes.
 
     Args:
-        keypair (bytes): Serialized x25519 keypair object.
+        keypair: Serialized keypair bytes.
 
     Returns:
-        x25519: Deserialized x25519 keypair object.
+        Deserialized x25519 keypair object.
     """
     return x25519().deserialize(keypair)
 
 
-def get_shared_key(keystore_path, pnt_keystore, secret_key, peer_pub_key):
-    """
-    Generate a shared key.
+def get_shared_key(
+    keystore_path: str, pnt_keystore: str, secret_key: bytes, peer_pub_key: bytes
+) -> bytes:
+    """Generate shared key using X25519 key agreement.
 
     Args:
-        keystore_path (str): Path to the keystore file.
-        pnt_keystore (str): The keystore pointer.
-        secret_key (bytes): Secret key used for the keypair.
-        peer_pub_key (bytes): Public key of the peer to generate the shared key with.
+        keystore_path: Path to keystore file.
+        pnt_keystore: Keystore pointer.
+        secret_key: Secret key for keypair.
+        peer_pub_key: Peer's public key.
 
     Returns:
-        bytes: The generated shared key.
+        Generated shared key bytes.
     """
     keypair_obj = x25519(keystore_path, pnt_keystore, secret_key)
     shared_key = keypair_obj.agree(peer_pub_key)
     return shared_key
 
 
-def encrypt_and_encode(plaintext):
-    """
-    Encrypt and encode plaintext.
+def encrypt_and_encode(plaintext: str) -> str:
+    """Encrypt and Base64-encode plaintext.
 
     Args:
-        plaintext (str): Plaintext to encrypt and encode.
+        plaintext: Plaintext to encrypt.
 
     Returns:
-        str: Base64 encoded ciphertext.
+        Base64-encoded ciphertext.
     """
     encryption_key = load_key(get_configs("SHARED_KEY"), 32)
 
@@ -318,15 +316,14 @@ def encrypt_and_encode(plaintext):
     ).decode("utf-8")
 
 
-def decrypt_and_decode(encoded_ciphertext):
-    """
-    Decode and decrypt encoded ciphertext.
+def decode_and_decrypt(encoded_ciphertext: str) -> str:
+    """Decode and decrypt Base64-encoded ciphertext.
 
     Args:
-        encoded_ciphertext (str): Base64 encoded ciphertext to decode and decrypt.
+        encoded_ciphertext: Base64-encoded ciphertext.
 
     Returns:
-        str: Decrypted plaintext.
+        Decrypted plaintext.
     """
     encryption_key = load_key(get_configs("SHARED_KEY"), 32)
 
@@ -334,15 +331,100 @@ def decrypt_and_decode(encoded_ciphertext):
     return decrypt_aes(encryption_key, ciphertext)
 
 
-def convert_to_fernet_key(secret_key):
-    """
-    Converts a secret key to a Fernet key.
+def encrypt_data(data_bytes: bytes) -> bytes:
+    """Encrypt data for database storage.
 
     Args:
-        secret_key (bytes): The secret key (must be 32 bytes long).
+        data_bytes: Serialized data bytes.
 
     Returns:
-        bytes: The base64-encoded Fernet key.
+        Encrypted data bytes.
+    """
+    encryption_key = load_key(get_configs("SHARED_KEY", strict=True), 32)
+    return encrypt_aes(encryption_key, data_bytes, is_bytes=True)
+
+
+def decrypt_data(encrypted_data: bytes) -> bytes:
+    """Decrypt data from database.
+
+    Args:
+        encrypted_data: Encrypted data bytes.
+
+    Returns:
+        Decrypted data bytes.
+    """
+    encryption_key = load_key(get_configs("SHARED_KEY", strict=True), 32)
+    return decrypt_aes(encryption_key, encrypted_data, is_bytes=True)
+
+
+def decrypt_and_deserialize(encrypted_keypair: bytes) -> Optional[Any]:
+    """Decrypt and deserialize keypair.
+
+    Args:
+        encrypted_keypair_blob: Encrypted keypair from database.
+
+    Returns:
+        X25519 keypair object or None if blob is None.
+    """
+    if not encrypted_keypair:
+        return None
+
+    decrypted_bytes = decrypt_data(encrypted_keypair)
+    return deserialize_keypair(decrypted_bytes)
+
+
+def serialize_and_encrypt(data_obj: Any) -> bytes:
+    """Serialize and encrypt data object.
+
+    Args:
+        data_obj: Object with serialize() method.
+
+    Returns:
+        Encrypted serialized bytes.
+    """
+    serialized_bytes = data_obj.serialize()
+    return encrypt_data(serialized_bytes)
+
+
+def hash_data(data: str) -> str:
+    """Generate HMAC hash of data.
+
+    Args:
+        data: Data to hash.
+
+    Returns:
+        HMAC hash string.
+    """
+
+    hashing_key = load_key(get_configs("HASHING_SALT", strict=True), 32)
+    return generate_hmac(hashing_key, data)
+
+
+def verify_hash(data: str, expected_hash: str) -> bool:
+    """Verify HMAC hash of data.
+
+    Args:
+        data: Data to verify.
+        expected_hash: Expected HMAC hash.
+
+    Returns:
+        Boolean indicating if hash matches.
+    """
+    hashing_key = load_key(get_configs("HASHING_SALT", strict=True), 32)
+    return verify_hmac(hashing_key, data, expected_hash)
+
+
+def convert_to_fernet_key(secret_key: bytes) -> bytes:
+    """Convert 32-byte secret key to Fernet key.
+
+    Args:
+        secret_key: 32-byte secret key.
+
+    Returns:
+        Base64-encoded Fernet key.
+
+    Raises:
+        ValueError: If secret_key is not 32 bytes.
     """
     if len(secret_key) != 32:
         raise ValueError("Secret key must be 32 bytes long")
@@ -350,18 +432,14 @@ def convert_to_fernet_key(secret_key):
     return base64.urlsafe_b64encode(secret_key)
 
 
-def is_valid_x25519_public_key(encoded_key):
-    """
-    Validates an X25519 public key encoded in base64.
+def is_valid_x25519_public_key(encoded_key: bytes) -> Tuple[bool, Optional[str]]:
+    """Validate Base64-encoded X25519 public key.
 
     Args:
-        encoded_key (bytes): The base64-encoded public key to validate.
+        encoded_key: Base64-encoded public key.
 
     Returns:
-        tuple[bool, str]: A tuple where the first element is a boolean i
-            ndicating whether the key is valid, and the second element is an
-            error message if the key is invalid, or None if the key
-            is valid.
+        Tuple of (is_valid, error_message).
     """
     try:
         decoded_key = base64.b64decode(encoded_key)
@@ -377,36 +455,24 @@ def is_valid_x25519_public_key(encoded_key):
         return False, f"Invalid X25519 public key: {err}"
 
 
-def remove_none_values(values):
-    """
-    Removes None values from a list of dictionaries.
+def remove_none_values(values: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Remove None values from list of dictionaries.
 
     Args:
-        values (list): A list of dictionaries.
+        values: List of dictionaries.
 
     Returns:
-        list: A new list of dictionaries where None values have been removed.
-
-    Example:
-        values = [
-            {"a": 1, "b": None, "c": 3},
-            {"a": None, "b": 2, "c": 3},
-            {"a": 1, "b": 2, "c": None}
-        ]
-        filtered_values = remove_none_values(values)
-        # Output: [{'a': 1, 'c': 3}, {'b': 2, 'c': 3}, {'a': 1, 'b': 2}]
+        List with None values removed from each dict.
     """
     return [{k: v for k, v in value.items() if v is not None} for value in values]
 
 
-def clear_keystore(eid, keystore_name=None):
-    """
-    Delete keystore files based on eid and optionally a specific keystore name.
+def clear_keystore(eid: str, keystore_name: Optional[str] = None) -> None:
+    """Delete keystore files by eid and optional keystore name.
 
     Args:
-        eid (str): The unique identifier for the keystore files.
-        keystore_name (str, optional): The specific keystore name to delete. If not provided,
-            it will delete all related keystore files.
+        eid: Unique identifier for keystore files.
+        keystore_name: Specific keystore name to delete, or None for all.
     """
     file_suffixes = [keystore_name] if keystore_name else ["publish", "device_id"]
     keystore_path = get_configs("KEYSTORE_PATH")
@@ -426,15 +492,18 @@ def clear_keystore(eid, keystore_name=None):
             )
 
 
-def load_platforms_from_file(file_path):
-    """
-    Load platform data from a JSON file.
+def load_platforms_from_file(file_path: str) -> List[Dict[str, Any]]:
+    """Load platform details from JSON file.
 
     Args:
-        file_path (str): The path to the JSON file containing platform data.
+        file_path: Path to platforms JSON file.
 
     Returns:
-        dict: A dictionary containing platform data.
+        List of platform dictionaries.
+
+    Raises:
+        FileNotFoundError: If file doesn't exist.
+        json.JSONDecodeError: If file has invalid JSON.
     """
     try:
         with open(file_path, "r", encoding="utf-8") as file:
@@ -448,21 +517,24 @@ def load_platforms_from_file(file_path):
         return {}
 
 
-def get_supported_platforms():
-    """Get supported platforms"""
+def get_supported_platforms() -> Tuple[str, ...]:
+    """Get all supported platform names.
+
+    Returns:
+        Tuple of platform names.
+    """
     platform_details = load_platforms_from_file(SUPPORTED_PLATFORM_FILE_PATH)
     return tuple(platform["name"] for platform in platform_details)
 
 
-def get_platforms_by_protocol_type(protocol_type):
-    """
-    Get all platform names with the given protocol_type.
+def get_platforms_by_protocol_type(protocol_type: str) -> Tuple[str, ...]:
+    """Get platform names by protocol type.
 
     Args:
-        protocol_type (str): The protocol type to filter platforms by.
+        protocol_type: Protocol type to filter by.
 
     Returns:
-        tuple: A tuple of platform names matching the protocol_type.
+        Tuple of matching platform names.
     """
     platform_details = load_platforms_from_file(SUPPORTED_PLATFORM_FILE_PATH)
     return tuple(
@@ -473,24 +545,23 @@ def get_platforms_by_protocol_type(protocol_type):
 
 
 def validate_metrics_args(
-    start_date: str = None,
-    end_date: str = None,
-    top=None,
-    page=None,
-    page_size=None,
-):
-    """
-    Validates arguments for metrics endpoints.
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    top: Optional[int] = None,
+    page: Optional[int] = None,
+    page_size: Optional[int] = None,
+) -> None:
+    """Validate metrics endpoint arguments.
 
     Args:
-        start_date (str): Start date in "YYYY-MM-DD" format.
-        end_date (str): End date in "YYYY-MM-DD" format.
-        top (int, optional): Maximum number of results to return.
-        page (int, optional): Page number for pagination.
-        page_size (int, optional): Number of records per page.
+        start_date: Start date in "YYYY-MM-DD" format.
+        end_date: End date in "YYYY-MM-DD" format.
+        top: Maximum number of results.
+        page: Page number for pagination.
+        page_size: Records per page.
 
     Raises:
-        ValueError: If any of the validations fail.
+        ValueError: If validation fails.
     """
     if start_date is None:
         start_date = datetime.strftime(datetime.now() - timedelta(days=30), "%Y-%m-%d")
@@ -527,15 +598,17 @@ def validate_metrics_args(
 
 
 def parse_date(date_str: str, field_name: str) -> datetime:
-    """
-    Validates and parses a date string.
+    """Validate and parse date string in YYYY-MM-DD format.
 
     Args:
-        date_str (str): The date string to validate.
-        field_name (str): Name of the field (for error messages).
+        date_str: Date string to parse.
+        field_name: Field name for error messages.
 
     Returns:
-        datetime: Parsed datetime object.
+        Parsed datetime object.
+
+    Raises:
+        ValueError: If date format is invalid.
     """
     try:
         parsed_date = datetime.strptime(date_str, "%Y-%m-%d")
@@ -566,21 +639,23 @@ def parse_date(date_str: str, field_name: str) -> datetime:
         ) from e
 
 
-def filter_dict(original_dict, keys_to_remove=None, include_only=None):
-    """
-    Filter a dictionary by either removing specified keys or including only specified keys.
+def filter_dict(
+    original_dict: Dict[str, Any],
+    keys_to_remove: Optional[Iterable[str]] = None,
+    include_only: Optional[Iterable[str]] = None,
+) -> Dict[str, Any]:
+    """Filter dictionary by removing or including specified keys.
 
     Args:
-        original_dict (dict): The dictionary to filter.
-        keys_to_remove (iterable, optional): A collection of keys to be removed from the dictionary.
-        include_only (iterable, optional): A collection of keys to include in the filtered
-            dictionary, in the specified order.
+        original_dict: Dictionary to filter.
+        keys_to_remove: Keys to remove.
+        include_only: Keys to include (in specified order).
 
     Returns:
-        dict: A new dictionary filtered according to the specified criteria.
+        Filtered dictionary.
 
     Raises:
-        ValueError: If both `keys_to_remove` and `include_only` are provided.
+        ValueError: If both keys_to_remove and include_only are provided.
     """
     if keys_to_remove and include_only:
         raise ValueError("Cannot specify both 'keys_to_remove' and 'include_only'.")

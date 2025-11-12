@@ -8,7 +8,7 @@ from collections import defaultdict
 from datetime import datetime, time
 from peewee import fn
 from src.db_models import Entity, Signups, Token
-from src.utils import decrypt_and_decode
+from src.utils import decode_and_decrypt
 
 
 def get_signup_users(filters=None, group_by=None, options=None):
@@ -232,7 +232,7 @@ def get_retained_users(filters=None, group_by=None, options=None):
             if not batch_results:
                 break
             for row in batch_results:
-                decrypted_code = decrypt_and_decode(row.country_code)
+                decrypted_code = decode_and_decrypt(row.country_code)
                 if (
                     country_code is None
                     or decrypted_code.lower() == country_code.lower()

@@ -18,7 +18,7 @@ from phonenumbers import geocoder
 from src.db import connect
 from src.entity import fetch_all_entities
 from src.utils import (
-    decrypt_and_decode,
+    decode_and_decrypt,
     validate_metrics_args,
     filter_dict,
     get_configs,
@@ -144,7 +144,7 @@ def update_result_by_time(result, entity_date_created, time_name):
 
 def update_countries(result, entity):
     """Helper to update the result dictionary with country-based data."""
-    region_code = decrypt_and_decode(entity.country_code)
+    region_code = decode_and_decrypt(entity.country_code)
     country_name = geocoder._region_display_name(region_code, "en")
 
     if any(country_name in x for x in result["countries"]):
