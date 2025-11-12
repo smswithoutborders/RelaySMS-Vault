@@ -57,13 +57,14 @@ class EntityService(vault_pb2_grpc.EntityServicer):
 
     @classmethod
     def _get_entity_lock(cls, identifier: str) -> threading.Lock:
-        """Get or create a lock for a specific entity."""
+        """Get or create a lock for a specific entity using hashed identifier."""
+        identifier_hash = generate_hmac(HASHING_KEY, identifier)
         with cls._locks_lock:
-            lock = cls._entity_locks.get(identifier)
+            lock = cls._entity_locks.get(identifier_hash)
             if lock is None:
                 lock = threading.Lock()
-                cls._entity_locks[identifier] = lock
-                logger.debug("Created new lock for identifier %s", identifier)
+                cls._entity_locks[identifier_hash] = lock
+                logger.debug("Created new lock for hashed identifier")
             return lock
 
     def handle_create_grpc_error_response(
