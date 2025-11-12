@@ -35,7 +35,7 @@ jobs:
             echo "========================="
             echo "Building project ..."
             echo "========================="
-            if ! assembler deploy --project vault --rebuild; then
+            if ! assembler drop && assembler deploy; then
               echo "❌ Error building project!"
               exit 1
             fi
