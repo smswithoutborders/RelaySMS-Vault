@@ -1,23 +1,24 @@
 # SPDX-License-Identifier: GPL-3.0-only
 """OTP Service Module - handles SMS and email OTP delivery."""
 
-from abc import ABC, abstractmethod
-from enum import Enum
-from typing import Tuple, Optional
 import datetime
 import random
-import requests
+from abc import ABC, abstractmethod
+from enum import Enum
+from typing import Optional, Tuple
 
-from twilio.rest import Client
+import requests
 from twilio.base.exceptions import TwilioRestException
-from src.db_models import OTPRateLimit, OTP
-from src.utils import get_configs, get_bool_config, get_list_config
+from twilio.rest import Client
+
+from base_logger import get_logger
+from src.db_models import OTP, OTPRateLimit
 from src.sms_outbound import (
+    QUEUEDROID_SUPPORTED_VERIFICATION_REGION_CODES,
     get_phonenumber_region_code,
     send_with_queuedroid,
-    QUEUEDROID_SUPPORTED_VERIFICATION_REGION_CODES,
 )
-from base_logger import get_logger
+from src.utils import get_bool_config, get_configs, get_list_config
 
 logger = get_logger(__name__)
 
