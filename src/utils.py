@@ -52,6 +52,34 @@ def load_key(filepath: str, key_length: int) -> bytes:
         raise
 
 
+def load_and_decode_key(filepath: str, key_length: int) -> bytes:
+    """Load and Base64-decode key from file."""
+
+    try:
+        with open(filepath, "rb") as f:
+            encoded = f.readline().strip()
+
+        try:
+            key = base64.b64decode(encoded, validate=True)
+        except Exception:
+            logger.error("Invalid Base64 in key file: %s", filepath)
+            raise
+
+        if len(key) < key_length:
+            raise ValueError(
+                f"Decoded key length ({len(key)}) is less than required {key_length} bytes."
+            )
+
+        return key
+
+    except FileNotFoundError:
+        logger.error("Key file not found at %s.", filepath)
+        raise
+    except Exception as e:
+        logger.error("Failed to load and decode key: %s", e)
+        raise
+
+
 def create_tables(models: List[Any]) -> None:
     """Create tables for given Peewee models if they don't exist.
 
@@ -306,7 +334,7 @@ def encrypt_and_encode(plaintext: str) -> str:
     Returns:
         Base64-encoded ciphertext.
     """
-    encryption_key = load_key(get_configs("SHARED_KEY"), 32)
+    encryption_key = load_and_decode_key(get_configs("SHARED_KEY"), 32)
 
     return base64.b64encode(
         encrypt_aes(
@@ -325,7 +353,7 @@ def decode_and_decrypt(encoded_ciphertext: str) -> str:
     Returns:
         Decrypted plaintext.
     """
-    encryption_key = load_key(get_configs("SHARED_KEY"), 32)
+    encryption_key = load_and_decode_key(get_configs("SHARED_KEY"), 32)
 
     ciphertext = base64.b64decode(encoded_ciphertext)
     return decrypt_aes(encryption_key, ciphertext)
@@ -340,7 +368,7 @@ def encrypt_data(data_bytes: bytes) -> bytes:
     Returns:
         Encrypted data bytes.
     """
-    encryption_key = load_key(get_configs("SHARED_KEY", strict=True), 32)
+    encryption_key = load_and_decode_key(get_configs("SHARED_KEY", strict=True), 32)
     return encrypt_aes(encryption_key, data_bytes, is_bytes=True)
 
 
@@ -353,7 +381,7 @@ def decrypt_data(encrypted_data: bytes) -> bytes:
     Returns:
         Decrypted data bytes.
     """
-    encryption_key = load_key(get_configs("SHARED_KEY", strict=True), 32)
+    encryption_key = load_and_decode_key(get_configs("SHARED_KEY", strict=True), 32)
     return decrypt_aes(encryption_key, encrypted_data, is_bytes=True)
 
 
