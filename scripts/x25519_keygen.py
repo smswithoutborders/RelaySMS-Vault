@@ -1,25 +1,21 @@
-"""
-This program is free software: you can redistribute it under the terms
-of the GNU General Public License, v. 3.0. If a copy of the GNU General
-Public License was not distributed with this file, see <https://www.gnu.org/licenses/>.
-"""
+# SPDX-License-Identifier: GPL-3.0-only
+"""X25519 Keypair Generation, Export, and Testing CLI."""
 
-import os
-import base64
 import argparse
-import uuid
+import base64
 import json
+import os
 import random
+import uuid
 
 from smswithoutborders_libsig.keypairs import x25519
+
 from base_logger import get_logger
-from src.utils import get_configs, load_key
 from src.db_models import StaticKeypairs
-from src.crypto import encrypt_aes, decrypt_aes
+from src.utils import decrypt_and_deserialize, get_configs, serialize_and_encrypt
 
 logger = get_logger("static.x25519.keygen")
 
-ENCRYPTION_KEY = load_key(get_configs("SHARED_KEY", strict=True), 32)
 STATIC_KEYSTORE_PATH = get_configs("STATIC_X25519_KEYSTORE_PATH", strict=True)
 DEFAULT_EXPORT_PATH = os.path.join(STATIC_KEYSTORE_PATH, "exported_public_keys.json")
 
@@ -31,9 +27,7 @@ def generate_keypair(kid: int, keystore_path: str, version: str) -> None:
         keypair_obj = x25519(keystore_db_path)
         keypair_obj.init()
 
-        keypair_ciphertext = encrypt_aes(
-            ENCRYPTION_KEY, keypair_obj.serialize(), is_bytes=True
-        )
+        keypair_ciphertext = serialize_and_encrypt(keypair_obj)
 
         StaticKeypairs.create_keypair(
             kid=kid, keypair_bytes=keypair_ciphertext, status="active", version=version
@@ -110,13 +104,7 @@ def export_public_keys_to_file(file_path: str, yes: bool, skip_if_exists: bool) 
             {
                 "kid": keypair.kid,
                 "keypair": base64.b64encode(
-                    x25519()
-                    .deserialize(
-                        decrypt_aes(
-                            ENCRYPTION_KEY, keypair.keypair_bytes, is_bytes=True
-                        )
-                    )
-                    .get_public_key()
+                    decrypt_and_deserialize(keypair.keypair_bytes).get_public_key()
                 ).decode("utf-8"),
                 "status": keypair.status,
                 "version": keypair.version,
@@ -143,12 +131,8 @@ def test_keypairs() -> None:
 
         keypair1, keypair2 = random.sample(keypairs, 2)
 
-        keypair_1 = x25519().deserialize(
-            decrypt_aes(ENCRYPTION_KEY, keypair1.keypair_bytes, is_bytes=True)
-        )
-        keypair_2 = x25519().deserialize(
-            decrypt_aes(ENCRYPTION_KEY, keypair2.keypair_bytes, is_bytes=True)
-        )
+        keypair_1 = decrypt_and_deserialize(keypair1.keypair_bytes)
+        keypair_2 = decrypt_and_deserialize(keypair2.keypair_bytes)
 
         shared_secret_1 = keypair_1.agree(keypair_2.get_public_key())
         shared_secret_2 = keypair_2.agree(keypair_1.get_public_key())
