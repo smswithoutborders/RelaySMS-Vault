@@ -43,11 +43,12 @@ def decrypt_data(encrypted_data: bytes) -> bytes:
 
 
 def rotate_entity_encryption():
-    """Rotate encryption for keypairs and server_state of all entities."""
+    """Rotate encryption for entity data."""
 
     with Entity._meta.database.connection_context():
         entities_query = Entity.select().where(
-            (Entity.publish_keypair.is_null(False))
+            (Entity.country_code.is_null(False))
+            | (Entity.publish_keypair.is_null(False))
             | (Entity.device_id_keypair.is_null(False))
             | (Entity.server_state.is_null(False))
         )
@@ -72,6 +73,10 @@ def rotate_entity_encryption():
 
                     for entity in batch_entities:
                         try:
+                            if entity.country_code:
+                                decrypted_data = decode_and_decrypt(entity.country_code)
+                                entity.country_code = encrypt_and_encode(decrypted_data)
+
                             if entity.publish_keypair:
                                 decrypted_data = decrypt_data(entity.publish_keypair)
                                 entity.publish_keypair = encrypt_data(decrypted_data)
@@ -86,6 +91,7 @@ def rotate_entity_encryption():
 
                             entity.save(
                                 only=[
+                                    "country_code",
                                     "publish_keypair",
                                     "device_id_keypair",
                                     "server_state",
