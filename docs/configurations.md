@@ -5,7 +5,7 @@
 1. [Requirements](#requirements)
 2. [Dependencies](#dependencies)
 3. [Installation](#installation)
-4. [Configuration Options](#Configuration-Options)
+4. [Configuration Options](#configuration-options)
 5. [How to use](#how-to-use)
 6. [Docker](#docker)
 7. [Logger](#logger)
@@ -22,7 +22,7 @@
 On Ubuntu
 
 ```bash
-$ sudo apt install python3-dev libmysqlclient-dev apache2 apache2-dev make libapache2-mod-wsgi-py3
+sudo apt install python3-dev libmysqlclient-dev apache2 apache2-dev make libapache2-mod-wsgi-py3
 ```
 
 ## Linux Environment Variables
@@ -33,23 +33,57 @@ Variables used for the Project:
 - MYSQL_USER=STRING
 - MYSQL_PASSWORD=STRING
 - MYSQL_DATABASE=STRING
-- SHARED_KEY=PATH
-- HASHING_SALT=PATH
+- SQLITE_DATABASE_PATH=STRING
+- DATA_ENCRYPTION_KEY_PRIMARY_FILE=PATH
+- HMAC_KEY_FILE=PATH
 - HOST=STRING
 - PORT=STRING
-- SSL_SERVER_NAME=STRING
 - SSL_PORT=STRING
 - SSL_CERTIFICATE=PATH
 - SSL_KEY=PATH
-- SSL_PEM=PATH
-- ORIGINS=ARRAY
-- PLATFORMS_PATH=STRING
+- GRPC_HOST=STRING
+- GRPC_PORT=STRING
+- GRPC_SSL_PORT=STRING
+- GRPC_INTERNAL_PORT=STRING
+- GRPC_INTERNAL_SSL_PORT=STRING
+- KEYSTORE_PATH=STRING
+- STATIC_X25519_KEYSTORE_PATH=STRING
 - TWILIO_ACCOUNT_SID=STRING
 - TWILIO_AUTH_TOKEN=STRING
 - TWILIO_SERVICE_SID=STRING
-- ENABLE_RECAPTCHA=BOOLEAN
-- RECAPTCHA_SECRET_KEY=STRING
-- BROADCAST_WHITELIST
+- TWILIO_PHONE_NUMBER=STRING
+- QUEUEDROID_API_URL=STRING
+- QUEUEDROID_API_KEY=STRING
+- QUEUEDROID_EXCHANGE_ID=STRING
+- QUEUEDROID_QUEUE_ID=STRING
+- QUEUEDROID_SUPPORTED_VERIFICATION_REGION_CODES=ARRAY
+- EMAIL_SERVICE_URL=STRING
+- EMAIL_SERVICE_API_KEY=STRING
+- EMAIL_VERIFICATION_SENDER_ADDRESS=STRING
+- EMAIL_SUBJECT=STRING
+- EMAIL_ORGANIZATION_NAME=STRING
+- EMAIL_WEBSITE_URL=STRING
+- EMAIL_LOGO_URL=STRING
+- EMAIL_PROJECT_NAME=STRING
+- EMAIL_ABUSE_EMAIL=STRING
+- EMAIL_SUPPORT_EMAIL=STRING
+- EMAIL_OTP_EXPIRY_MINUTES=INTEGER
+- MOCK_OTP=BOOLEAN
+- SMS_OTP_ENABLED=BOOLEAN
+- SMS_OTP_AUTH_ENABLED=BOOLEAN
+- SMS_OTP_SIGNUP_ENABLED=BOOLEAN
+- SMS_OTP_RESET_PASSWORD_ENABLED=BOOLEAN
+- SMS_OTP_ALLOWED_COUNTRIES=STRING
+- EMAIL_OTP_ENABLED=BOOLEAN
+- EMAIL_OTP_AUTH_ENABLED=BOOLEAN
+- EMAIL_OTP_SIGNUP_ENABLED=BOOLEAN
+- EMAIL_OTP_RESET_PASSWORD_ENABLED=BOOLEAN
+- CAPTCHA_ENABLED=BOOLEAN
+- CAPTCHA_SERVER_URL=STRING
+- CAPTCHA_SECRET_KEY=STRING
+- LOG_LEVEL=STRING
+- DUMMY_PHONENUMBERS=STRING
+- DUMMY_PASSWORD=STRING
 - MODE=STRING
 
 ## Installation
@@ -59,9 +93,9 @@ Install all python packages for SMSWITHOUTBORDERS-BE
 ### Pip
 
 ```bash
-$ python3 -m venv venv
-$ . venv/bin/activate
-$ pip install -r requirements.txt
+python3 -m venv venv
+. venv/bin/activate
+pip install -r requirements.txt
 ```
 
 ### Set Keys
@@ -79,18 +113,18 @@ $ MYSQL_HOST= \
 If running the smswithoutborders-backend docker image use
 
 ```bash
-$ docker exec -it smswithoutborders-backend make set-keys
+docker exec -it smswithoutborders-backend make set-keys
 ```
 
 > See current shared-key and hashing-salt with the `make get-keys command`
 
 ### Keys file format
 
-- Use the SHARED_KEY and HASHING_SALT environment variables to point to your key files.
+- Use the DATA_ENCRYPTION_KEY_PRIMARY_FILE and HMAC_KEY_FILE environment variables to point to your key files.
 - Key should be on first line in your key files.
 - Key files should end with the suffix `.key`
 
-> NOTE: SHARED_KEY and HASHING_SALT environment variables must be provided else defaults will be used.
+> NOTE: DATA_ENCRYPTION_KEY_PRIMARY_FILE and HMAC_KEY_FILE environment variables must be provided else defaults will be used.
 
 ### Inject dummy data
 
@@ -99,13 +133,13 @@ _For testing purposes only!_
 - Fill in all the neccessary [environment variables](#linux-environment-variables)
 
 ```bash
-$ MYSQL_HOST= MYSQL_USER= MYSQL_PASSWORD= make dummy-user-inject
+MYSQL_HOST= MYSQL_USER= MYSQL_PASSWORD= make dummy-user-inject
 ```
 
 If running the smswithoutborders-backend docker image use
 
 ```bash
-$ docker exec -it smswithoutborders-backend make dummy-user-inject
+docker exec -it smswithoutborders-backend make dummy-user-inject
 ```
 
 details
@@ -154,20 +188,19 @@ $ MYSQL_HOST= \
   MYSQL_DATABASE= \
   HOST= \
   PORT= \
-  SSL_SERVER_NAME= \
   SSL_PORT= \
   SSL_CERTIFICATE= \
   SSL_KEY= \
-  SSL_PEM= \
-  ORIGINS=[""] \
+  DATA_ENCRYPTION_KEY_PRIMARY_FILE= \
+  HMAC_KEY_FILE= \
   TWILIO_ACCOUNT_SID= \
   TWILIO_AUTH_TOKEN= \
   TWILIO_SERVICE_SID= \
-  ENABLE_RECAPTCHA= \
-  RECAPTCHA_SECRET_KEY= \
-  BROADCAST_WHITELIST= \
+  CAPTCHA_ENABLED= \
+  CAPTCHA_SERVER_URL= \
+  CAPTCHA_SECRET_KEY= \
   MODE=production \
-  python3 server.py
+  python3 app.py
 ```
 
 **MOD_WSGI**
@@ -179,18 +212,17 @@ $ MYSQL_HOST= \
   MYSQL_DATABASE= \
   HOST= \
   PORT= \
-  SSL_SERVER_NAME= \
   SSL_PORT= \
   SSL_CERTIFICATE= \
   SSL_KEY= \
-  SSL_PEM= \
-  ORIGINS=[""] \
+  DATA_ENCRYPTION_KEY_PRIMARY_FILE= \
+  HMAC_KEY_FILE= \
   TWILIO_ACCOUNT_SID= \
   TWILIO_AUTH_TOKEN= \
   TWILIO_SERVICE_SID= \
-  ENABLE_RECAPTCHA= \
-  RECAPTCHA_SECRET_KEY= \
-  BROADCAST_WHITELIST= \
+  CAPTCHA_ENABLED= \
+  CAPTCHA_SERVER_URL= \
+  CAPTCHA_SECRET_KEY= \
   MODE=production \
   mod_wsgi-express start-server wsgi_script.py \
   --user www-data \
@@ -198,9 +230,7 @@ $ MYSQL_HOST= \
   --port '${PORT}' \
   --ssl-certificate-file '${SSL_CERTIFICATE}' \
   --ssl-certificate-key-file '${SSL_KEY}' \
-  --ssl-certificate-chain-file '${SSL_PEM}' \
   --https-only \
-  --server-name '${SSL_SERVER_NAME}' \
   --https-port '${SSL_PORT}'
 ```
 
@@ -211,13 +241,13 @@ $ MYSQL_HOST= \
 Build smswithoutborders-backend development docker image
 
 ```bash
-$ docker build --target development -t smswithoutborders-backend .
+docker build --target development -t smswithoutborders-backend .
 ```
 
 Build smswithoutborders-backend production docker image
 
 ```bash
-$ docker build --target production -t smswithoutborders-backend .
+docker build --target production -t smswithoutborders-backend .
 ```
 
 ### Run
@@ -233,13 +263,14 @@ $ docker run -d -p 9000:9000 \
   --env 'MYSQL_DATABASE=' \
   --env 'HOST=' \
   --env 'PORT=' \
-  --env 'ORIGINS=[""]' \
+  --env 'DATA_ENCRYPTION_KEY_PRIMARY_FILE=' \
+  --env 'HMAC_KEY_FILE=' \
   --env 'TWILIO_ACCOUNT_SID=' \
   --env 'TWILIO_AUTH_TOKEN=' \
   --env 'TWILIO_SERVICE_SID=' \
-  --env 'ENABLE_RECAPTCHA=' \
-  --env 'RECAPTCHA_SECRET_KEY=' \
-  --env 'BROADCAST_WHITELIST=' \
+  --env 'CAPTCHA_ENABLED=' \
+  --env 'CAPTCHA_SERVER_URL=' \
+  --env 'CAPTCHA_SECRET_KEY=' \
   smswithoutborders-backend
 ```
 
@@ -254,18 +285,17 @@ $ docker run -d -p 9000:9000 \
   --env 'MYSQL_DATABASE=' \
   --env 'HOST=' \
   --env 'PORT=' \
-  --env 'SSL_SERVER_NAME=' \
   --env 'SSL_PORT=' \
   --env 'SSL_CERTIFICATE=' \
   --env 'SSL_KEY=' \
-  --env 'SSL_PEM=' \
-  --env 'ORIGINS=[""]' \
+  --env 'DATA_ENCRYPTION_KEY_PRIMARY_FILE=' \
+  --env 'HMAC_KEY_FILE=' \
   --env 'TWILIO_ACCOUNT_SID=' \
   --env 'TWILIO_AUTH_TOKEN=' \
   --env 'TWILIO_SERVICE_SID=' \
-  --env 'ENABLE_RECAPTCHA=' \
-  --env 'RECAPTCHA_SECRET_KEY=' \
-  --env 'BROADCAST_WHITELIST=' \
+  --env 'CAPTCHA_ENABLED=' \
+  --env 'CAPTCHA_SERVER_URL=' \
+  --env 'CAPTCHA_SECRET_KEY=' \
   --env 'MODE=production' \
   smswithoutborders-backend
 ```
@@ -279,7 +309,7 @@ $ docker run -d -p 9000:9000 \
 ### Python
 
 ```bash
-$ python3 server.py --logs=debug
+python3 server.py --logs=debug
 ```
 
 ### Docker
@@ -287,13 +317,13 @@ $ python3 server.py --logs=debug
 Container logs
 
 ```bash
-$ docker logs smswithoutborders-backend
+docker logs smswithoutborders-backend
 ```
 
 API logs in container
 
 ```bash
-$ docker exec -it smswithoutborders-backend tail -f <path_to_mod_wsgi_error_logs>
+docker exec -it smswithoutborders-backend tail -f <path_to_mod_wsgi_error_logs>
 ```
 
 ## References

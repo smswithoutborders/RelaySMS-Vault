@@ -8,7 +8,7 @@ from src.crypto import generate_hmac
 from src.utils import decode_and_decrypt, encrypt_and_encode, load_key, get_configs
 from base_logger import get_logger
 
-HASHING_KEY = load_key(get_configs("HASHING_SALT"), 32)
+HASHING_KEY = load_key(get_configs("HMAC_KEY_FILE"), 32)
 
 logger = get_logger("clean.account.identifiers")
 

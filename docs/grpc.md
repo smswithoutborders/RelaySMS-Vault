@@ -81,24 +81,24 @@ python -m grpc_tools.protoc -I protos/v1 --python_out=. --grpc_python_out=. prot
 #### Public Server
 
 ```bash
-HASHING_SALT=/path/to/hashing.key \
-SHARED_KEY=/path/to/shared.key \
+DATA_ENCRYPTION_KEY_PRIMARY_FILE=/path/to/encryption.key \
+HMAC_KEY_FILE=/path/to/hashing.key \
 KEYSTORE_PATH=/path/to/key_store \
 SQLITE_DATABASE_PATH=/path/to/local.db \
 GRPC_PORT=6000 \
-HOST=127.0.0.1 \
+GRPC_HOST=127.0.0.1 \
 python3 grpc_server.py
 ```
 
 #### Internal Server
 
 ```bash
-HASHING_SALT=/path/to/hashing.key \
-SHARED_KEY=/path/to/shared.key \
+DATA_ENCRYPTION_KEY_PRIMARY_FILE=/path/to/encryption.key \
+HMAC_KEY_FILE=/path/to/hashing.key \
 KEYSTORE_PATH=/path/to/key_store \
 SQLITE_DATABASE_PATH=/path/to/local.db \
 GRPC_INTERNAL_PORT=6099 \
-HOST=127.0.0.1 \
+GRPC_HOST=127.0.0.1 \
 python3 grpc_internal_server.py
 ```
 

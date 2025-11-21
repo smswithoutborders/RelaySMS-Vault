@@ -266,11 +266,10 @@ export PORT=19000
 
 ### Server
 
-- `SSL_SERVER_NAME`: SSL certificate server name (default: `localhost`)
 - `HOST`: REST server host (default: `localhost`)
 - `PORT`: REST server port (default: `19000`)
 - `SSL_PORT`: REST SSL port (default: `19001`)
-- `SSL_CERTIFICATE`, `SSL_KEY`, `SSL_PEM`: SSL file paths (optional)
+- `SSL_CERTIFICATE`, `SSL_KEY`: SSL file paths (optional)
 
 ### gRPC
 
@@ -282,8 +281,8 @@ export PORT=19000
 
 ### Security
 
-- `SHARED_KEY`: Path to 32-byte encryption key (default: `encryption.key`)
-- `HASHING_SALT`: Path to 32-byte hashing salt (default: `hashing.key`)
+- `DATA_ENCRYPTION_KEY_PRIMARY_FILE`: Path to 32-byte encryption key (default: `encryption.key`)
+- `HMAC_KEY_FILE`: Path to 32-byte HMAC key (default: `hashing.key`)
 
 ### Database
 
@@ -300,10 +299,22 @@ export PORT=19000
 ### OTP
 
 - `MOCK_OTP`: Enable mock OTP for development (`true` by default)
+- `SMS_OTP_ENABLED`: Enable SMS OTP globally (default: `true`)
+- `SMS_OTP_AUTH_ENABLED`: Enable SMS OTP for authentication (default: `true`)
+- `SMS_OTP_SIGNUP_ENABLED`: Enable SMS OTP for signup (default: `true`)
+- `SMS_OTP_RESET_PASSWORD_ENABLED`: Enable SMS OTP for password reset (default: `true`)
+- `SMS_OTP_ALLOWED_COUNTRIES`: Comma-separated list of allowed country codes for SMS OTP
+- `EMAIL_OTP_ENABLED`: Enable email OTP globally (default: `true`)
+- `EMAIL_OTP_AUTH_ENABLED`: Enable email OTP for authentication (default: `true`)
+- `EMAIL_OTP_SIGNUP_ENABLED`: Enable email OTP for signup (default: `true`)
+- `EMAIL_OTP_RESET_PASSWORD_ENABLED`: Enable email OTP for password reset (default: `true`)
+- `EMAIL_OTP_EXPIRY_MINUTES`: Email OTP expiration time in minutes (default: `10`)
 
-### CORS
+### Captcha
 
-- `ORIGINS`: Allowed CORS origins (default: `[]`)
+- `CAPTCHA_ENABLED`: Enable captcha verification (default: `false`)
+- `CAPTCHA_SERVER_URL`: Libre Captcha server URL
+- `CAPTCHA_SECRET_KEY`: Captcha API secret key
 
 ### Keystore
 
