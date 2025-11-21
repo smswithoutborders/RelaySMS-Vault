@@ -52,8 +52,8 @@ def configure_test_environment(session_temp_dir):
             "3a1f7c1b4e6578379a87e2bfc3d4a76f8b29a6f4d8e5c9a8b3f7a6c2d4e5f8a7"
         )
 
-    set_configs("HASHING_SALT", str(hashing_key_path))
-    set_configs("SHARED_KEY", str(encryption_key_path))
+    set_configs("HMAC_KEY_FILE", str(hashing_key_path))
+    set_configs("DATA_ENCRYPTION_KEY_PRIMARY_FILE", str(encryption_key_path))
 
 
 @pytest.fixture(autouse=True)
@@ -166,7 +166,7 @@ def test_entity_creation_already_exists(grpc_server_mock):
     from src.db_models import Entity
 
     request_data = {"phone_number": "+237123456789"}
-    hash_key = load_key(get_configs("HASHING_SALT"), 32)
+    hash_key = load_key(get_configs("HMAC_KEY_FILE"), 32)
     phone_number_hash = generate_hmac(hash_key, request_data["phone_number"])
 
     Entity.create(
@@ -291,7 +291,7 @@ def test_entity_complete_creation_success(grpc_server_mock):
         base64.b64decode(response.server_device_id_pub_key),
     )
 
-    hash_key = load_key(get_configs("HASHING_SALT"), 32)
+    hash_key = load_key(get_configs("HMAC_KEY_FILE"), 32)
     phone_number_hash = generate_hmac(hash_key, request_data["phone_number"])
 
     entity_obj = Entity.get(Entity.phone_number_hash == phone_number_hash)
@@ -368,7 +368,7 @@ def test_entity_initiate_authentication_success(grpc_server_mock):
     from src.db_models import Entity
 
     request_data = {"phone_number": "+237123456789", "password": "Password@1234"}
-    hash_key = load_key(get_configs("HASHING_SALT"), 32)
+    hash_key = load_key(get_configs("HMAC_KEY_FILE"), 32)
     phone_number_hash = generate_hmac(hash_key, request_data["phone_number"])
 
     Entity.create(
@@ -410,7 +410,7 @@ def test_entity_complete_authentication_success(grpc_server_mock):
         "client_publish_pub_key": base64.b64encode(b"\x82" * 32).decode("utf-8"),
         "client_device_id_pub_key": base64.b64encode(b"\x82" * 32).decode("utf-8"),
     }
-    hash_key = load_key(get_configs("HASHING_SALT"), 32)
+    hash_key = load_key(get_configs("HMAC_KEY_FILE"), 32)
     phone_number_hash = generate_hmac(hash_key, request_data["phone_number"])
 
     Entity.create(
@@ -469,7 +469,7 @@ def test_entity_authenticate_incorrect_password(grpc_server_mock):
     from src.db_models import Entity
 
     request_data = {"phone_number": "+237123456789", "password": "Password@123"}
-    hash_key = load_key(get_configs("HASHING_SALT"), 32)
+    hash_key = load_key(get_configs("HMAC_KEY_FILE"), 32)
     phone_number_hash = generate_hmac(hash_key, request_data["phone_number"])
 
     Entity.create(
@@ -509,7 +509,7 @@ def test_entity_complete_authentication_invalid_public_keys(grpc_server_mock):
         "client_publish_pub_key": "invalid_key",
         "client_device_id_pub_key": "invalid_key",
     }
-    hash_key = load_key(get_configs("HASHING_SALT"), 32)
+    hash_key = load_key(get_configs("HMAC_KEY_FILE"), 32)
     phone_number_hash = generate_hmac(hash_key, request_data["phone_number"])
 
     Entity.create(

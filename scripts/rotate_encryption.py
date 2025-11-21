@@ -23,7 +23,7 @@ def decode_and_decrypt(encoded_ciphertext: str) -> str:
     Returns:
         Decrypted plaintext.
     """
-    encryption_key = load_key(get_configs("SHARED_KEY"), 32)
+    encryption_key = load_key(get_configs("DATA_ENCRYPTION_KEY_SECONDARY_FILE"), 32)
 
     ciphertext = base64.b64decode(encoded_ciphertext)
     return decrypt_aes(encryption_key, ciphertext)
@@ -38,7 +38,9 @@ def decrypt_data(encrypted_data: bytes) -> bytes:
     Returns:
         Decrypted data bytes.
     """
-    encryption_key = load_key(get_configs("SHARED_KEY", strict=True), 32)
+    encryption_key = load_key(
+        get_configs("DATA_ENCRYPTION_KEY_SECONDARY_FILE", strict=True), 32
+    )
     return decrypt_aes(encryption_key, encrypted_data, is_bytes=True)
 
 
