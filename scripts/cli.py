@@ -15,7 +15,7 @@ from base_logger import get_logger
 
 logger = get_logger("vault.cli")
 
-HASHING_KEY = load_key(get_configs("HASHING_SALT"), 32)
+HASHING_KEY = load_key(get_configs("HMAC_KEY_FILE"), 32)
 DUMMY_PHONENUMBERS = get_configs(
     "DUMMY_PHONENUMBERS", default_value="+237123456789"
 ).split(",")
