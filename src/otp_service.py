@@ -68,11 +68,41 @@ EMAIL_SUPPORT_EMAIL = get_configs(
 EMAIL_OTP_EXPIRY_MINUTES = int(
     get_configs("EMAIL_OTP_EXPIRY_MINUTES", default_value="10")
 )
+
+MAX_OTP_REQUESTS = int(get_configs("OTP_MAX_REQUESTS", default_value="5"))
+MAX_OTP_VERIFY_ATTEMPTS = int(get_configs("OTP_MAX_VERIFY_ATTEMPTS", default_value="5"))
+
 RATE_LIMIT_WINDOWS = [
-    {"duration": 5, "count": 1},  # 5 minute window
-    {"duration": 10, "count": 2},  # 10 minute window
-    {"duration": 30, "count": 3},  # 30 minute window
-    {"duration": 120, "count": 4},  # 2 hour window
+    {
+        "duration": int(
+            get_configs("OTP_RATE_LIMIT_WINDOW_1_DURATION", default_value="5")
+        ),
+        "count": int(get_configs("OTP_RATE_LIMIT_WINDOW_1_COUNT", default_value="1")),
+    },
+    {
+        "duration": int(
+            get_configs("OTP_RATE_LIMIT_WINDOW_2_DURATION", default_value="10")
+        ),
+        "count": int(get_configs("OTP_RATE_LIMIT_WINDOW_2_COUNT", default_value="2")),
+    },
+    {
+        "duration": int(
+            get_configs("OTP_RATE_LIMIT_WINDOW_3_DURATION", default_value="30")
+        ),
+        "count": int(get_configs("OTP_RATE_LIMIT_WINDOW_3_COUNT", default_value="3")),
+    },
+    {
+        "duration": int(
+            get_configs("OTP_RATE_LIMIT_WINDOW_4_DURATION", default_value="120")
+        ),
+        "count": int(get_configs("OTP_RATE_LIMIT_WINDOW_4_COUNT", default_value="4")),
+    },
+    {
+        "duration": int(
+            get_configs("OTP_RATE_LIMIT_WINDOW_5_DURATION", default_value="1440")
+        ),
+        "count": int(get_configs("OTP_RATE_LIMIT_WINDOW_5_COUNT", default_value="5")),
+    },
 ]
 
 
@@ -84,7 +114,7 @@ class ContactType(Enum):
 
 
 class OTPAction(Enum):
-    """OTP action types for granular control."""
+    """OTP action types."""
 
     AUTH = "auth"
     SIGNUP = "signup"
@@ -92,19 +122,19 @@ class OTPAction(Enum):
 
 
 class MockOTPHandler:
-    """Centralized mock OTP handling for testing."""
+    """Mock OTP handler for testing."""
 
     MOCK_CODE = "123456"
 
     @staticmethod
     def send() -> Tuple[bool, str]:
-        """Mock OTP send - always succeeds."""
+        """Send mock OTP."""
         logger.info("Mock OTP sent")
         return True, "OTP sent successfully. Please check for the code."
 
     @staticmethod
     def verify(otp_code: str) -> Tuple[bool, str]:
-        """Mock OTP verification."""
+        """Verify mock OTP."""
         if otp_code == MockOTPHandler.MOCK_CODE:
             logger.info("Mock OTP verified")
             return True, "OTP verified successfully."
@@ -119,11 +149,11 @@ class OTPDeliveryMethod(ABC):
     def send(
         self, identifier: str, message_body: Optional[str] = None
     ) -> Tuple[bool, str]:
-        """Send OTP to identifier."""
+        """Send OTP."""
 
     @abstractmethod
     def verify(self, identifier: str, otp_code: str) -> Tuple[bool, str]:
-        """Verify OTP for identifier."""
+        """Verify OTP."""
 
 
 class SMSDeliveryMethod(OTPDeliveryMethod):
@@ -189,12 +219,11 @@ class SMSDeliveryMethod(OTPDeliveryMethod):
         """Send OTP via Queuedroid."""
         message_body = f"Your RelaySMS Verification Code is: {otp_code}"
         success = send_with_queuedroid(phone_number, message_body)
-        message = (
-            "OTP sent. Check your phone."
+        return (
+            (True, "OTP sent. Check your phone.")
             if success
-            else "Failed to send OTP. Try again."
+            else (False, "Failed to send OTP. Try again.")
         )
-        return success, message
 
     def _send_with_twilio(
         self, phone_number: str, message_body: Optional[str] = None
@@ -357,7 +386,7 @@ class EmailDeliveryMethod(OTPDeliveryMethod):
 
 
 class OTPService:
-    """Main OTP service handling phone and email delivery."""
+    """OTP service for phone and email delivery."""
 
     def __init__(self):
         self.sms_delivery = SMSDeliveryMethod()
@@ -367,7 +396,7 @@ class OTPService:
 def is_delivery_method_enabled(
     contact_type: ContactType, action: Optional[OTPAction] = None
 ) -> bool:
-    """Check if a delivery method is enabled for a specific action."""
+    """Check if delivery method is enabled for action."""
     if contact_type == ContactType.EMAIL:
         if not EMAIL_OTP_ENABLED:
             return False
@@ -391,7 +420,7 @@ def is_delivery_method_enabled(
 
 
 def get_rate_limit_key(identifier: str, contact_type: ContactType) -> dict:
-    """Get rate limiting field based on contact type."""
+    """Get rate limit filter key."""
     return (
         {"email": identifier}
         if contact_type == ContactType.EMAIL
@@ -400,31 +429,25 @@ def get_rate_limit_key(identifier: str, contact_type: ContactType) -> dict:
 
 
 def is_rate_limited(identifier: str, contact_type: ContactType) -> bool:
-    """Check if identifier has exceeded OTP rate limit."""
+    """Check if identifier is rate limited."""
     logger.debug("Checking rate limit")
 
-    current_time = datetime.datetime.now()
     rate_limit_filter = get_rate_limit_key(identifier, contact_type)
     rate_limit = OTPRateLimit.get_or_none(**rate_limit_filter)
 
-    if rate_limit:
-        clean_rate_limit_store(identifier, contact_type)
-        index = next(
-            (
-                i
-                for i, window in enumerate(RATE_LIMIT_WINDOWS)
-                if window["count"] == rate_limit.attempt_count
-            ),
-            -1,
-        )
+    if not rate_limit:
+        return False
 
-        if rate_limit.date_expires >= current_time:
-            logger.info(
-                "Rate limit exceeded: %d min window",
-                RATE_LIMIT_WINDOWS[index]["duration"],
-            )
-            return True
-    return False
+    if rate_limit.date_expires < datetime.datetime.now():
+        logger.info("Rate limit expired, allowing request")
+        return False
+
+    logger.info(
+        "Rate limit active: %d attempts, expires at %s",
+        rate_limit.attempt_count,
+        rate_limit.date_expires,
+    )
+    return True
 
 
 def send_otp(
@@ -433,7 +456,7 @@ def send_otp(
     message_body: Optional[str] = None,
     action: Optional[OTPAction] = None,
 ) -> Tuple[bool, str, Optional[int]]:
-    """Send OTP to identifier (phone or email)."""
+    """Send OTP."""
     logger.debug("Sending OTP")
 
     if not is_delivery_method_enabled(contact_type, action):
@@ -449,19 +472,21 @@ def send_otp(
     if is_rate_limited(identifier, contact_type):
         return False, "Too many OTP requests. Wait and try again.", None
 
+    otp_record = increment_rate_limit(identifier, contact_type)
+    expires = int(otp_record.date_expires.timestamp())
+
     service = OTPService()
-    expires = None
 
-    if contact_type == ContactType.EMAIL:
-        success, message = service.email_delivery.send(identifier, message_body)
-    else:
-        success, message = service.sms_delivery.send(identifier, message_body)
+    try:
+        if contact_type == ContactType.EMAIL:
+            success, message = service.email_delivery.send(identifier, message_body)
+        else:
+            success, message = service.sms_delivery.send(identifier, message_body)
 
-    if success:
-        otp_record = increment_rate_limit(identifier, contact_type)
-        expires = int(otp_record.date_expires.timestamp())
-
-    return success, message, expires
+        return success, message, expires
+    except Exception as e:
+        logger.error("OTP send failed with exception: %s", e)
+        return False, "Failed to send OTP. Try again later.", expires
 
 
 def verify_otp(
@@ -470,7 +495,7 @@ def verify_otp(
     contact_type: ContactType = ContactType.PHONE,
     action: Optional[OTPAction] = None,
 ) -> Tuple[bool, str]:
-    """Verify OTP for identifier."""
+    """Verify OTP."""
     logger.debug("Verifying OTP")
 
     if not is_delivery_method_enabled(contact_type, action):
@@ -499,32 +524,11 @@ def verify_otp(
     return success, message
 
 
-def clean_rate_limit_store(identifier: str, contact_type: ContactType):
-    """Clean expired rate limit records."""
-    logger.debug("Cleaning expired rate limits")
-
-    current_time = datetime.datetime.now()
-    rate_limit_filter = get_rate_limit_key(identifier, contact_type)
-
-    rows_deleted = (
-        OTPRateLimit.delete()
-        .where(
-            *[
-                getattr(OTPRateLimit, field) == value
-                for field, value in rate_limit_filter.items()
-            ],
-            OTPRateLimit.date_expires < current_time,
-            OTPRateLimit.attempt_count >= RATE_LIMIT_WINDOWS[-1]["count"],
-        )
-        .execute()
-    )
-
-    if rows_deleted > 0:
-        logger.info("Cleaned %d expired rate limit records", rows_deleted)
-
-
 def increment_rate_limit(identifier: str, contact_type: ContactType):
-    """Increment rate limit counter for identifier."""
+    """Increment rate limit with progressive windows.
+
+    Progressive windows increase duration after each attempt.
+    """
     logger.debug("Incrementing rate limit")
 
     current_time = datetime.datetime.now()
@@ -539,21 +543,62 @@ def increment_rate_limit(identifier: str, contact_type: ContactType):
         },
     )
 
-    if not created:
-        rate_limit.attempt_count += 1
-        index = next(
-            (
-                i
-                for i, window in enumerate(RATE_LIMIT_WINDOWS)
-                if window["count"] == rate_limit.attempt_count
-            ),
-            -1,
+    if created:
+        contact_type_str = "email" if contact_type == ContactType.EMAIL else "phone"
+        logger.info(
+            "Rate limit: %s attempts=%d expires=%s",
+            contact_type_str,
+            rate_limit.attempt_count,
+            rate_limit.date_expires,
         )
+        return rate_limit
 
-        rate_limit.date_expires = current_time + datetime.timedelta(
-            minutes=RATE_LIMIT_WINDOWS[index]["duration"]
+    rate_limit = OTPRateLimit.get(**rate_limit_filter)
+
+    if rate_limit.date_expires < current_time:
+        if rate_limit.attempt_count >= MAX_OTP_REQUESTS:
+            logger.info("Resetting rate limit after hard limit expiry")
+            new_attempt_count = 1
+        else:
+            new_attempt_count = rate_limit.attempt_count + 1
+    else:
+        logger.warning(
+            "increment_rate_limit called while rate limit active - this is unexpected"
         )
-        rate_limit.save()
+        new_attempt_count = rate_limit.attempt_count + 1
+
+    if new_attempt_count > MAX_OTP_REQUESTS:
+        new_attempt_count = MAX_OTP_REQUESTS
+
+    index = next(
+        (
+            i
+            for i, window in enumerate(RATE_LIMIT_WINDOWS)
+            if window["count"] == new_attempt_count
+        ),
+        len(RATE_LIMIT_WINDOWS) - 1,
+    )
+
+    new_expires = current_time + datetime.timedelta(
+        minutes=RATE_LIMIT_WINDOWS[index]["duration"]
+    )
+
+    rows_updated = (
+        OTPRateLimit.update(attempt_count=new_attempt_count, date_expires=new_expires)
+        .where(
+            *[
+                getattr(OTPRateLimit, field) == value
+                for field, value in rate_limit_filter.items()
+            ]
+        )
+        .execute()
+    )
+
+    if rows_updated == 0:
+        logger.error("Failed to update rate limit - record may have been deleted")
+        raise Exception("Rate limit update failed")
+
+    rate_limit = OTPRateLimit.get(**rate_limit_filter)
 
     contact_type_str = "email" if contact_type == ContactType.EMAIL else "phone"
     logger.info(
@@ -567,7 +612,7 @@ def increment_rate_limit(identifier: str, contact_type: ContactType):
 
 
 def clear_rate_limit(identifier: str, contact_type: ContactType):
-    """Clear rate limit counter for identifier."""
+    """Clear rate limit."""
     logger.debug("Clearing rate limit")
 
     rate_limit_filter = get_rate_limit_key(identifier, contact_type)
@@ -583,40 +628,36 @@ def clear_rate_limit(identifier: str, contact_type: ContactType):
 
 
 def generate_otp(length: int = 6) -> str:
-    """Generate OTP of specified length."""
+    """Generate random numeric OTP."""
     return "".join(secrets.choice(string.digits) for _ in range(length))
 
 
 def create_inapp_otp(
     identifier: str, contact_type: ContactType = ContactType.PHONE, exp_time: int = 10
 ) -> Tuple[str, Tuple[str, int]]:
-    """Create or update OTP for identifier."""
-    otp_filter = {}
-    if contact_type == ContactType.EMAIL:
-        otp_filter["email"] = identifier
-    else:
-        otp_filter["phone_number"] = identifier
-    otp_filter["is_verified"] = False
+    """Create and store OTP."""
+    otp_data = {
+        "otp_code": generate_otp(),
+        "date_expires": datetime.datetime.now() + datetime.timedelta(minutes=exp_time),
+        "attempt_count": 0,
+    }
 
-    otp_entry, created = OTP.get_or_create(
-        **otp_filter,
-        defaults={
-            "otp_code": generate_otp(),
-            "date_expires": datetime.datetime.now()
-            + datetime.timedelta(minutes=exp_time),
-            "attempt_count": 0,
-        },
+    if contact_type == ContactType.EMAIL:
+        otp_data["email"] = identifier
+        otp_data["phone_number"] = None
+    else:
+        otp_data["phone_number"] = identifier
+        otp_data["email"] = None
+
+    OTP.replace(**otp_data).execute()
+
+    otp_filter = (
+        {"email": identifier}
+        if contact_type == ContactType.EMAIL
+        else {"phone_number": identifier}
     )
 
-    if not created:
-        otp_entry.otp_code = generate_otp()
-        otp_entry.date_expires = datetime.datetime.now() + datetime.timedelta(
-            minutes=exp_time
-        )
-        otp_entry.attempt_count = 0
-        otp_entry.is_verified = False
-        otp_entry.save()
-
+    otp_entry = OTP.get(**otp_filter)
     expiration_time = int(otp_entry.date_expires.timestamp())
     return "OTP created successfully.", (otp_entry.otp_code, expiration_time)
 
@@ -624,42 +665,35 @@ def create_inapp_otp(
 def verify_inapp_otp(
     identifier: str, otp_code: str, contact_type: ContactType
 ) -> Tuple[bool, str]:
-    """Verify in-app generated OTP."""
-    otp_filter = {}
-    if contact_type == ContactType.EMAIL:
-        otp_filter["email"] = identifier
-    else:
-        otp_filter["phone_number"] = identifier
+    """Verify OTP."""
+    otp_filter = (
+        {"email": identifier}
+        if contact_type == ContactType.EMAIL
+        else {"phone_number": identifier}
+    )
 
     otp_entry = OTP.get_or_none(
-        *[getattr(OTP, field) == value for field, value in otp_filter.items()],
-        ~(OTP.is_verified),
+        *[getattr(OTP, field) == value for field, value in otp_filter.items()]
     )
 
     if not otp_entry:
-        verified_otp_entry = OTP.get_or_none(
-            *[getattr(OTP, field) == value for field, value in otp_filter.items()],
-            OTP.is_verified,
-            OTP.otp_code == otp_code,
-        )
-        if verified_otp_entry:
-            contact_type_str = (
-                "email" if contact_type == ContactType.EMAIL else "phone number"
-            )
-            return True, f"OTP already verified for this {contact_type_str}."
-
         contact_type_str = (
             "email" if contact_type == ContactType.EMAIL else "phone number"
         )
         return False, f"No OTP record found for this {contact_type_str}."
 
     if otp_entry.is_expired():
+        otp_entry.delete_instance()
         return False, "OTP expired. Request a new one."
 
+    otp_entry.increment_attempt_count()
+
+    if otp_entry.attempt_count >= MAX_OTP_VERIFY_ATTEMPTS:
+        otp_entry.delete_instance()
+        return False, "Too many incorrect attempts. OTP invalidated. Request a new one."
+
     if otp_entry.otp_code != otp_code:
-        otp_entry.increment_attempt_count()
         return False, "Incorrect OTP. Try again."
 
-    otp_entry.is_verified = True
-    otp_entry.save()
+    otp_entry.delete_instance()
     return True, "OTP verified successfully!"

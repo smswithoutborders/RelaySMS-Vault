@@ -1,5 +1,18 @@
 # Changelog
 
+## [v1.4.0] - 2025-11-26
+
+### Security Enhancements
+
+- Removed the `is_verified` column from the `otp` table as it is no longer needed with the new fail-closed security model.
+- Made `phone_number` and `email` columns unique in the `otp` table to prevent multiple active OTP records for the same identifier.
+- This change enables atomic replace operations and prevents OTP reuse attacks where verified codes could be reused after expiry.
+
+### Changed
+
+- Dropped existing non-unique indexes on `phone_number` and `email` columns in the `otp` table.
+- Added unique indexes on `phone_number` and `email` columns in the `otp` table.
+
 ## [v1.3.0] - 2025-11-11
 
 ### Added

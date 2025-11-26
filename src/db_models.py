@@ -117,7 +117,6 @@ class OTP(Model):
     otp_code = CharField(max_length=10)
     attempt_count = IntegerField(default=0)
     date_expires = DateTimeField()
-    is_verified = BooleanField(default=False)
     date_created = DateTimeField(default=datetime.datetime.now)
 
     class Meta:
@@ -126,8 +125,8 @@ class OTP(Model):
         database = database
         table_name = "otp"
         indexes = (
-            (("phone_number",), False),
-            (("email",), False),
+            (("phone_number",), True),
+            (("email",), True),
             (("date_expires",), False),
         )
 
@@ -138,12 +137,12 @@ class OTP(Model):
     def reset_attempt_count(self):
         """Reset the attempt count for the OTP."""
         self.attempt_count = 0
-        self.save()
+        self.save(only=["attempt_count"])
 
     def increment_attempt_count(self):
         """Increment the attempt count for the OTP."""
         self.attempt_count += 1
-        self.save()
+        self.save(only=["attempt_count"])
 
 
 class Signups(Model):
