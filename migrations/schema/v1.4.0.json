@@ -1,0 +1,29 @@
+[
+  {
+    "action": "drop_column",
+    "table": "otp",
+    "column_name": "is_verified"
+  },
+  {
+    "action": "drop_index",
+    "table": "otp",
+    "index_name": "otp_phone_number"
+  },
+  {
+    "action": "drop_index",
+    "table": "otp",
+    "index_name": "otp_email"
+  },
+  {
+    "action": "add_index",
+    "table": "otp",
+    "columns": ["phone_number"],
+    "unique": true
+  },
+  {
+    "action": "add_index",
+    "table": "otp",
+    "columns": ["email"],
+    "unique": true
+  }
+]
