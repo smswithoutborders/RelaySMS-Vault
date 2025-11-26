@@ -28,7 +28,7 @@ def ResetPassword(self, request, context):
 
     response = vault_pb2.ResetPasswordResponse
 
-    def initiate_reset(entity_obj):
+    def initiate_reset():
         if is_captcha_enabled():
             logger.debug("Captcha verification is enabled.")
 
@@ -48,9 +48,6 @@ def ResetPassword(self, request, context):
                 return pow_response
 
             message, expires = pow_response
-            entity_obj.device_id = None
-            entity_obj.server_state = None
-            entity_obj.save(only=["device_id", "server_state"])
 
             return response(
                 requires_ownership_proof=True,
@@ -81,6 +78,7 @@ def ResetPassword(self, request, context):
         long_lived_token = generate_llt(eid, device_id_shared_key)
 
         entity_obj.password_hash = password_hash
+        entity_obj.server_state = None
         _, identifier_value = self.get_identifier(request)
         entity_obj.device_id = compute_device_id(
             device_id_shared_key,
@@ -94,6 +92,7 @@ def ResetPassword(self, request, context):
         entity_obj.save(
             only=[
                 "password_hash",
+                "server_state",
                 "device_id",
                 "client_publish_pub_key",
                 "client_device_id_pub_key",
@@ -165,7 +164,7 @@ def ResetPassword(self, request, context):
         if request.ownership_proof_response:
             return complete_reset(entity_obj)
 
-        return initiate_reset(entity_obj)
+        return initiate_reset()
 
     except Exception as e:
         return self.handle_create_grpc_error_response(
