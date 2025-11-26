@@ -2,7 +2,8 @@
 """OTP Service Module - handles SMS and email OTP delivery."""
 
 import datetime
-import random
+import secrets
+import string
 from abc import ABC, abstractmethod
 from enum import Enum
 from typing import Optional, Tuple
@@ -582,8 +583,8 @@ def clear_rate_limit(identifier: str, contact_type: ContactType):
 
 
 def generate_otp(length: int = 6) -> str:
-    """Generate random OTP of specified length."""
-    return str(random.randint(10 ** (length - 1), 10**length - 1))
+    """Generate OTP of specified length."""
+    return "".join(secrets.choice(string.digits) for _ in range(length))
 
 
 def create_inapp_otp(
