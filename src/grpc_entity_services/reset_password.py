@@ -56,7 +56,9 @@ def ResetPassword(self, request, context):
             )
 
     def complete_reset(entity_obj):
-        success, pow_response = self.handle_pow_verification(context, request, response)
+        success, pow_response = self.handle_pow_verification(
+            context, request, response, OTPAction.RESET_PASSWORD
+        )
         if not success:
             return pow_response
 

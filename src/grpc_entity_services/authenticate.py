@@ -96,7 +96,9 @@ def AuthenticateEntity(self, request, context):
             )
 
     def complete_authentication(entity_obj):
-        success, pow_response = self.handle_pow_verification(context, request, response)
+        success, pow_response = self.handle_pow_verification(
+            context, request, response, OTPAction.AUTH
+        )
         if not success:
             return pow_response
 

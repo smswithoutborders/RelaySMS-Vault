@@ -1,0 +1,13 @@
+[
+  {
+    "action": "add_column",
+    "table": "otp",
+    "column_name": "purpose",
+    "field": "CharField(max_length=50, null=True)"
+  },
+  {
+    "action": "drop_not_null",
+    "table": "otp",
+    "column": "otp_code"
+  }
+]

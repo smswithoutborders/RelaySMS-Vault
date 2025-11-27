@@ -35,7 +35,9 @@ def CreateEntity(self, request, context):
         request.phone_number = self.clean_phone_number(request.phone_number)
 
     def complete_creation():
-        success, pow_response = self.handle_pow_verification(context, request, response)
+        success, pow_response = self.handle_pow_verification(
+            context, request, response, OTPAction.SIGNUP
+        )
         if not success:
             return pow_response
 

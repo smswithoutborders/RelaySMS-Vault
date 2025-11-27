@@ -147,12 +147,14 @@ class OTPDeliveryMethod(ABC):
 
     @abstractmethod
     def send(
-        self, identifier: str, message_body: Optional[str] = None
+        self, identifier: str, action: OTPAction, message_body: Optional[str] = None
     ) -> Tuple[bool, str]:
         """Send OTP."""
 
     @abstractmethod
-    def verify(self, identifier: str, otp_code: str) -> Tuple[bool, str]:
+    def verify(
+        self, identifier: str, otp_code: str, action: OTPAction
+    ) -> Tuple[bool, str]:
         """Verify OTP."""
 
 
@@ -160,10 +162,10 @@ class SMSDeliveryMethod(OTPDeliveryMethod):
     """SMS OTP delivery via Twilio and Queuedroid."""
 
     def send(
-        self, identifier: str, message_body: Optional[str] = None
+        self, identifier: str, action: OTPAction, message_body: Optional[str] = None
     ) -> Tuple[bool, str]:
         """Send OTP via SMS."""
-        logger.debug("Sending SMS OTP")
+        logger.debug("Sending SMS OTP for action: %s", action.value)
 
         if SMS_OTP_ALLOWED_COUNTRIES:
             region_code, country_name = get_phonenumber_region_code(identifier)
@@ -183,14 +185,16 @@ class SMSDeliveryMethod(OTPDeliveryMethod):
 
         region_code, _ = get_phonenumber_region_code(identifier)
         if region_code in QUEUEDROID_SUPPORTED_VERIFICATION_REGION_CODES:
-            _, otp_result = create_inapp_otp(identifier, ContactType.PHONE)
+            _, otp_result = create_inapp_otp(identifier, action, ContactType.PHONE)
             otp_code, _ = otp_result
             return self._send_with_queuedroid(identifier, otp_code)
-        return self._send_with_twilio(identifier, message_body)
+        return self._send_with_twilio(identifier, action, message_body)
 
-    def verify(self, identifier: str, otp_code: str) -> Tuple[bool, str]:
+    def verify(
+        self, identifier: str, otp_code: str, action: OTPAction
+    ) -> Tuple[bool, str]:
         """Verify OTP via SMS."""
-        logger.debug("Verifying SMS OTP")
+        logger.debug("Verifying SMS OTP for action: %s", action.value)
 
         if SMS_OTP_ALLOWED_COUNTRIES:
             region_code, country_name = get_phonenumber_region_code(identifier)
@@ -210,8 +214,8 @@ class SMSDeliveryMethod(OTPDeliveryMethod):
 
         region_code, _ = get_phonenumber_region_code(identifier)
         if region_code in QUEUEDROID_SUPPORTED_VERIFICATION_REGION_CODES:
-            return verify_inapp_otp(identifier, otp_code, ContactType.PHONE)
-        return self._verify_with_twilio(identifier, otp_code)
+            return verify_inapp_otp(identifier, otp_code, action, ContactType.PHONE)
+        return self._verify_with_twilio(identifier, otp_code, action)
 
     def _send_with_queuedroid(
         self, phone_number: str, otp_code: str
@@ -226,9 +230,20 @@ class SMSDeliveryMethod(OTPDeliveryMethod):
         )
 
     def _send_with_twilio(
-        self, phone_number: str, message_body: Optional[str] = None
+        self, phone_number: str, action: OTPAction, message_body: Optional[str] = None
     ) -> Tuple[bool, str]:
         """Send OTP via Twilio."""
+        otp_data = {
+            "phone_number": phone_number,
+            "date_expires": datetime.datetime.now() + datetime.timedelta(minutes=10),
+            "attempt_count": 0,
+            "purpose": action.value,
+            "otp_code": None,
+        }
+
+        OTP.replace(**otp_data).execute()
+        logger.info("Twilio OTP record created for action: %s", action.value)
+
         client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
 
         try:
@@ -254,8 +269,24 @@ class SMSDeliveryMethod(OTPDeliveryMethod):
             logger.error("Twilio error: %s", e)
             return False, "Failed to send OTP. Try again."
 
-    def _verify_with_twilio(self, phone_number: str, otp_code: str) -> Tuple[bool, str]:
+    def _verify_with_twilio(
+        self, phone_number: str, otp_code: str, action: OTPAction
+    ) -> Tuple[bool, str]:
         """Verify OTP via Twilio."""
+        otp_entry = OTP.get_or_none(OTP.phone_number == phone_number)
+
+        if not otp_entry:
+            logger.warning("No Twilio OTP record found for verification")
+            return False, "OTP record not found. Request a new OTP."
+
+        if otp_entry.purpose != action.value:
+            logger.warning(
+                "Twilio OTP action mismatch: expected '%s', got '%s'",
+                otp_entry.purpose,
+                action.value,
+            )
+            return False, "OTP action mismatch. Request a new OTP."
+
         client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
 
         try:
@@ -265,6 +296,10 @@ class SMSDeliveryMethod(OTPDeliveryMethod):
 
             if verification_check.status == "approved":
                 logger.info("OTP verified via Twilio")
+
+                OTP.delete().where(OTP.phone_number == phone_number).execute()
+                logger.info("Twilio OTP record deleted")
+
                 return True, "OTP verified successfully."
 
             if verification_check.status == "pending":
@@ -291,28 +326,33 @@ class EmailDeliveryMethod(OTPDeliveryMethod):
     """Email OTP delivery via HTTP email service."""
 
     def send(
-        self, identifier: str, message_body: Optional[str] = None
+        self, identifier: str, action: OTPAction, message_body: Optional[str] = None
     ) -> Tuple[bool, str]:
         """Send OTP via email."""
-        logger.debug("Sending email OTP")
+        logger.debug("Sending email OTP for action: %s", action.value)
 
         if MOCK_OTP:
             return MockOTPHandler.send()
 
         _, otp_result = create_inapp_otp(
-            identifier, ContactType.EMAIL, EMAIL_OTP_EXPIRY_MINUTES
+            identifier, action, ContactType.EMAIL, EMAIL_OTP_EXPIRY_MINUTES
         )
         otp_code, _ = otp_result
 
         return self._send_with_email_service(identifier, otp_code, message_body)
 
-    def verify(self, identifier: str, otp_code: str) -> Tuple[bool, str]:
+    def verify(
+        self, identifier: str, otp_code: str, action: OTPAction
+    ) -> Tuple[bool, str]:
         """Verify OTP via email."""
-        logger.debug("Verifying email OTP")
+        logger.debug(
+            "Verifying email OTP for action: %s",
+            action.value if action else "unspecified",
+        )
 
         if MOCK_OTP:
             return MockOTPHandler.verify(otp_code)
-        return verify_inapp_otp(identifier, otp_code, ContactType.EMAIL)
+        return verify_inapp_otp(identifier, otp_code, action, ContactType.EMAIL)
 
     def _send_with_email_service(
         self, email_address: str, otp_code: str, message_body: Optional[str] = None
@@ -452,9 +492,9 @@ def is_rate_limited(identifier: str, contact_type: ContactType) -> bool:
 
 def send_otp(
     identifier: str,
+    action: OTPAction,
     contact_type: ContactType = ContactType.PHONE,
     message_body: Optional[str] = None,
-    action: Optional[OTPAction] = None,
 ) -> Tuple[bool, str, Optional[int]]:
     """Send OTP."""
     logger.debug("Sending OTP")
@@ -477,23 +517,19 @@ def send_otp(
 
     service = OTPService()
 
-    try:
-        if contact_type == ContactType.EMAIL:
-            success, message = service.email_delivery.send(identifier, message_body)
-        else:
-            success, message = service.sms_delivery.send(identifier, message_body)
+    if contact_type == ContactType.EMAIL:
+        success, message = service.email_delivery.send(identifier, action, message_body)
+    else:
+        success, message = service.sms_delivery.send(identifier, action, message_body)
 
-        return success, message, expires
-    except Exception as e:
-        logger.error("OTP send failed with exception: %s", e)
-        return False, "Failed to send OTP. Try again later.", expires
+    return success, message, expires
 
 
 def verify_otp(
     identifier: str,
     otp_code: str,
+    action: OTPAction,
     contact_type: ContactType = ContactType.PHONE,
-    action: Optional[OTPAction] = None,
 ) -> Tuple[bool, str]:
     """Verify OTP."""
     logger.debug("Verifying OTP")
@@ -514,9 +550,9 @@ def verify_otp(
     service = OTPService()
 
     if contact_type == ContactType.EMAIL:
-        success, message = service.email_delivery.verify(identifier, otp_code)
+        success, message = service.email_delivery.verify(identifier, otp_code, action)
     else:
-        success, message = service.sms_delivery.verify(identifier, otp_code)
+        success, message = service.sms_delivery.verify(identifier, otp_code, action)
 
     if success:
         clear_rate_limit(identifier, contact_type)
@@ -633,13 +669,17 @@ def generate_otp(length: int = 6) -> str:
 
 
 def create_inapp_otp(
-    identifier: str, contact_type: ContactType = ContactType.PHONE, exp_time: int = 10
+    identifier: str,
+    action: OTPAction,
+    contact_type: ContactType = ContactType.PHONE,
+    exp_time: int = 10,
 ) -> Tuple[str, Tuple[str, int]]:
     """Create and store OTP."""
     otp_data = {
         "otp_code": generate_otp(),
         "date_expires": datetime.datetime.now() + datetime.timedelta(minutes=exp_time),
         "attempt_count": 0,
+        "purpose": action.value,
     }
 
     if contact_type == ContactType.EMAIL:
@@ -663,7 +703,7 @@ def create_inapp_otp(
 
 
 def verify_inapp_otp(
-    identifier: str, otp_code: str, contact_type: ContactType
+    identifier: str, otp_code: str, action: OTPAction, contact_type: ContactType
 ) -> Tuple[bool, str]:
     """Verify OTP."""
     otp_filter = (
@@ -675,6 +715,14 @@ def verify_inapp_otp(
     otp_entry = OTP.get_or_none(
         *[getattr(OTP, field) == value for field, value in otp_filter.items()]
     )
+
+    if otp_entry and otp_entry.purpose != action.value:
+        logger.warning(
+            "OTP action mismatch: expected '%s', got '%s'",
+            otp_entry.purpose,
+            action.value,
+        )
+        return False, "OTP action mismatch. Request a new OTP."
 
     if not otp_entry:
         contact_type_str = (
