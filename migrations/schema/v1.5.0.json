@@ -8,6 +8,6 @@
   {
     "action": "drop_not_null",
     "table": "otp",
-    "column_name": "otp_code"
+    "column": "otp_code"
   }
 ]
