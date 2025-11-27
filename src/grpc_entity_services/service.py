@@ -165,11 +165,11 @@ class EntityService(vault_pb2_grpc.EntityServicer):
 
         return None
 
-    def handle_pow_verification(self, context, request, response):
+    def handle_pow_verification(self, context, request, response, action):
         """Handle proof of ownership verification."""
         identifier_type, identifier_value = self.get_identifier(request)
         success, message = verify_otp(
-            identifier_value, request.ownership_proof_response, identifier_type
+            identifier_value, request.ownership_proof_response, action, identifier_type
         )
         if not success:
             return success, self.handle_create_grpc_error_response(
@@ -183,9 +183,7 @@ class EntityService(vault_pb2_grpc.EntityServicer):
     def handle_pow_initialization(self, context, request, response, action):
         """Handle proof of ownership initialization."""
         identifier_type, identifier_value = self.get_identifier(request)
-        success, message, expires = send_otp(
-            identifier_value, identifier_type, action=action
-        )
+        success, message, expires = send_otp(identifier_value, action, identifier_type)
         if not success:
             return success, self.handle_create_grpc_error_response(
                 context,

@@ -1,23 +1,22 @@
-"""
-This program is free software: you can redistribute it under the terms
-of the GNU General Public License, v. 3.0. If a copy of the GNU General
-Public License was not distributed with this file, see <https://www.gnu.org/licenses/>.
-"""
+# SPDX-License-Identifier: GPL-3.0-only
+"""Peewee Database Models for the Application."""
 
 import datetime
 from enum import Enum
+
 from peewee import (
-    Model,
-    CharField,
-    TextField,
-    DateTimeField,
-    IntegerField,
-    UUIDField,
-    ForeignKeyField,
+    SQL,
     BlobField,
     BooleanField,
-    SQL,
+    CharField,
+    DateTimeField,
+    ForeignKeyField,
+    IntegerField,
+    Model,
+    TextField,
+    UUIDField,
 )
+
 from src.db import connect
 from src.utils import create_tables, get_configs
 
@@ -114,7 +113,8 @@ class OTP(Model):
 
     phone_number = CharField(null=True)
     email = CharField(null=True)
-    otp_code = CharField(max_length=10)
+    otp_code = CharField(max_length=10, null=True)
+    purpose = CharField(max_length=50, null=True)
     attempt_count = IntegerField(default=0)
     date_expires = DateTimeField()
     date_created = DateTimeField(default=datetime.datetime.now)
