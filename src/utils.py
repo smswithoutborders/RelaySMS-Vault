@@ -417,12 +417,25 @@ def serialize_and_encrypt(data_obj: Any) -> bytes:
     """Serialize and encrypt data object.
 
     Args:
-        data_obj: Object with serialize_json() method.
+        data_obj: Object with serialize() method.
 
     Returns:
         Encrypted serialized bytes.
     """
-    serialized_bytes = data_obj.serialize_json()
+    serialized_bytes = data_obj.serialize()
+    return encrypt_data(serialized_bytes)
+
+
+def serialize_state_and_encrypt(state_obj: Any) -> bytes:
+    """Serialize and encrypt state object using JSON format.
+
+    Args:
+        state_obj: State object with serialize_json().
+
+    Returns:
+        Encrypted serialized JSON bytes.
+    """
+    serialized_bytes = state_obj.serialize_json()
     return encrypt_data(serialized_bytes)
 
 

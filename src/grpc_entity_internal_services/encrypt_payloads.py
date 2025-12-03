@@ -9,7 +9,7 @@ import vault_pb2
 from base_logger import get_logger
 from src.entity import find_entity
 from src.relaysms_payload import encode_relay_sms_payload, encrypt_payload
-from src.utils import decrypt_data, hash_data, serialize_and_encrypt
+from src.utils import decrypt_data, hash_data, serialize_state_and_encrypt
 
 logger = get_logger(__name__)
 
@@ -65,7 +65,7 @@ def EncryptPayload(self, request, context):
                 error_type="UNKNOWN",
             )
 
-        entity_obj.server_state = serialize_and_encrypt(state)
+        entity_obj.server_state = serialize_state_and_encrypt(state)
         entity_obj.save(only=["server_state"])
         logger.info("Successfully encrypted payload.")
 
