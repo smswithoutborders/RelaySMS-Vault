@@ -14,7 +14,7 @@ from src.utils import (
     decrypt_and_deserialize,
     decrypt_data,
     hash_data,
-    serialize_and_encrypt,
+    serialize_state_and_encrypt,
 )
 
 logger = get_logger(__name__)
@@ -79,7 +79,7 @@ def DecryptPayload(self, request, context):
                 error_type="UNKNOWN",
             )
 
-        entity_obj.server_state = serialize_and_encrypt(state)
+        entity_obj.server_state = serialize_state_and_encrypt(state)
         entity_obj.save(only=["server_state"])
         logger.info("Successfully decrypted payload.")
 
