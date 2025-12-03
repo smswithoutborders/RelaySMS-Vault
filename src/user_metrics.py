@@ -1,12 +1,11 @@
-"""
-This program is free software: you can redistribute it under the terms
-of the GNU General Public License, v. 3.0. If a copy of the GNU General
-Public License was not distributed with this file, see <https://www.gnu.org/licenses/>.
-"""
+# SPDX-License-Identifier: GPL-3.0-only
+"""User metrics retrieval functions."""
 
 from collections import defaultdict
 from datetime import datetime, time
+
 from peewee import fn
+
 from src.db_models import Entity, Signups, Token
 from src.utils import decode_and_decrypt
 
@@ -128,11 +127,10 @@ def get_signup_users(filters=None, group_by=None, options=None):
         }
 
     if group_by == "country":
+        country_upper = fn.UPPER(Signups.country_code).alias("country_code")
         query = (
-            query.select(
-                Signups.country_code, fn.COUNT(Signups.id).alias("signup_users")
-            )
-            .group_by(Signups.country_code)
+            query.select(country_upper, fn.COUNT(Signups.id).alias("signup_users"))
+            .group_by(country_upper)
             .order_by(fn.COUNT(Signups.id).desc())
         )
     elif group_by == "date":
@@ -339,7 +337,9 @@ def get_retained_users(filters=None, group_by=None, options=None):
     if group_by == "country":
         country_aggregates = defaultdict(int)
         for _, decrypted_country in filtered_entities:
-            country_aggregates[decrypted_country] += 1
+            country_aggregates[
+                decrypted_country.upper() if decrypted_country else decrypted_country
+            ] += 1
 
         result = sorted(
             [
