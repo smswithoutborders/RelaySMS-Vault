@@ -46,7 +46,7 @@ def decrypt_payload(
         else:
             logger.debug("Deserializing state...")
             logger.debug("Current state: %s", server_state)
-            state = States.deserialize(server_state)
+            state = States.deserialize_json(server_state)
 
         logger.debug("Deserializing header...")
         logger.debug("Current header: %s", ratchet_header)
@@ -84,7 +84,7 @@ def encrypt_payload(server_state, client_publish_pub_key, content):
 
         logger.debug("Deserializing state...")
         logger.debug("Current state: %s", server_state)
-        state = States.deserialize(server_state)
+        state = States.deserialize_json(server_state)
         logger.debug("Encrypting content...")
         header, content_ciphertext = Ratchets.encrypt(
             state=state, data=content.encode("utf-8"), AD=client_publish_pub_key

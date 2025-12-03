@@ -417,12 +417,12 @@ def serialize_and_encrypt(data_obj: Any) -> bytes:
     """Serialize and encrypt data object.
 
     Args:
-        data_obj: Object with serialize() method.
+        data_obj: Object with serialize_json() method.
 
     Returns:
         Encrypted serialized bytes.
     """
-    serialized_bytes = data_obj.serialize()
+    serialized_bytes = data_obj.serialize_json()
     return encrypt_data(serialized_bytes)
 
 
