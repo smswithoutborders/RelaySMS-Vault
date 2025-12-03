@@ -15,6 +15,6 @@ phonenumbers==9.0.19
 pycryptodome==3.23.0
 pytest==9.0.1
 requests==2.32.5
-smswithoutborders_libsig @ git+https://github.com/smswithoutborders/lib_signal_double_ratchet_python.git@v0.1.11
+smswithoutborders_libsig @ git+https://github.com/smswithoutborders/lib_signal_double_ratchet_python.git@v0.2.0
 tqdm==4.67.1
 twilio==9.8.7
