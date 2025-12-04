@@ -88,18 +88,69 @@ def migrate_entities_origin():
         platforms_count = 0
 
         try:
-            with Entity._meta.database.atomic():
-                bridges_count = (
-                    Entity.update(origin=EntityOrigin.BRIDGE.value)
-                    .where(Entity.password_hash.is_null())
-                    .execute()
-                )
+            logger.info("Migrating entities origin field...")
 
-                platforms_count = (
-                    Entity.update(origin=EntityOrigin.WEB.value)
-                    .where(Entity.password_hash.is_null(False))
-                    .execute()
-                )
+            # Update bridge entities (no password)
+            bridge_entities = Entity.select().where(Entity.password_hash.is_null())
+            total_bridges = bridge_entities.count()
+
+            if total_bridges > 0:
+                logger.info(f"Updating {total_bridges} bridge entities...")
+                bridge_ids = [entity.eid for entity in bridge_entities]
+
+                with tqdm(
+                    total=len(bridge_ids),
+                    desc="Updating bridge entities",
+                    unit="entities",
+                ) as pbar:
+                    for batch_ids in chunked(bridge_ids, BATCH_SIZE):
+                        try:
+                            with Entity._meta.database.atomic():
+                                count = (
+                                    Entity.update(origin=EntityOrigin.BRIDGE.value)
+                                    .where(Entity.eid.in_(batch_ids))
+                                    .execute()
+                                )
+                                bridges_count += count
+                                pbar.update(len(batch_ids))
+                        except Exception as e:
+                            logger.error(f"Error updating bridge entities batch: {e}")
+                            migration_errors["entities"].append(
+                                {"batch": "bridge", "reason": str(e)}
+                            )
+                            pbar.update(len(batch_ids))
+
+            # Update web/platform entities (has password)
+            platform_entities = Entity.select().where(
+                Entity.password_hash.is_null(False)
+            )
+            total_platforms = platform_entities.count()
+
+            if total_platforms > 0:
+                logger.info(f"Updating {total_platforms} web/platform entities...")
+                platform_ids = [entity.eid for entity in platform_entities]
+
+                with tqdm(
+                    total=len(platform_ids),
+                    desc="Updating platform entities",
+                    unit="entities",
+                ) as pbar:
+                    for batch_ids in chunked(platform_ids, BATCH_SIZE):
+                        try:
+                            with Entity._meta.database.atomic():
+                                count = (
+                                    Entity.update(origin=EntityOrigin.WEB.value)
+                                    .where(Entity.eid.in_(batch_ids))
+                                    .execute()
+                                )
+                                platforms_count += count
+                                pbar.update(len(batch_ids))
+                        except Exception as e:
+                            logger.error(f"Error updating platform entities batch: {e}")
+                            migration_errors["entities"].append(
+                                {"batch": "platform", "reason": str(e)}
+                            )
+                            pbar.update(len(batch_ids))
 
             logger.info(
                 f"Set origin for {bridges_count} {EntityOrigin.BRIDGE.value} entities."
