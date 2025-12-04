@@ -123,7 +123,7 @@ def CreateBridgeEntity(self, request, context):
             country_code=request.country_code,
             identifier_type=ContactType.PHONE,
             origin=EntityOrigin.BRIDGE,
-            event_stage=StatsEventStage.COMPLETE,
+            event_stage=StatsEventStage.INITIATE,
         )
 
         logger.info("Successfully created entity.")
