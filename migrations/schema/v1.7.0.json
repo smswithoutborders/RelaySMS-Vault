@@ -1,0 +1,17 @@
+[
+  {
+    "action": "drop_column",
+    "table": "signups",
+    "column_name": "auth_method"
+  },
+  {
+    "action": "drop_column",
+    "table": "signups",
+    "column_name": "source"
+  },
+  {
+    "action": "rename_table",
+    "old_name": "signups",
+    "new_name": "stats"
+  }
+]

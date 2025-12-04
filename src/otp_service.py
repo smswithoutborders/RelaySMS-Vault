@@ -5,7 +5,6 @@ import datetime
 import secrets
 import string
 from abc import ABC, abstractmethod
-from enum import Enum
 from typing import Optional, Tuple
 
 import requests
@@ -19,6 +18,7 @@ from src.sms_outbound import (
     get_phonenumber_region_code,
     send_with_queuedroid,
 )
+from src.types import ContactType, OTPAction
 from src.utils import get_bool_config, get_configs, get_list_config
 
 logger = get_logger(__name__)
@@ -104,21 +104,6 @@ RATE_LIMIT_WINDOWS = [
         "count": int(get_configs("OTP_RATE_LIMIT_WINDOW_5_COUNT", default_value="5")),
     },
 ]
-
-
-class ContactType(Enum):
-    """Contact types for OTP delivery."""
-
-    PHONE = "phone_number"
-    EMAIL = "email_address"
-
-
-class OTPAction(Enum):
-    """OTP action types."""
-
-    AUTH = "auth"
-    SIGNUP = "signup"
-    RESET_PASSWORD = "reset_password"
 
 
 class MockOTPHandler:

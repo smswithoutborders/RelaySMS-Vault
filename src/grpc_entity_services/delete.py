@@ -5,7 +5,9 @@ import grpc
 
 import vault_pb2
 from base_logger import get_logger
+from src import stats
 from src.tokens import fetch_entity_tokens
+from src.types import ContactType, EntityOrigin, StatsEventStage, StatsEventType
 from src.utils import clear_keystore, decode_and_decrypt
 
 logger = get_logger(__name__)
@@ -79,6 +81,21 @@ def DeleteEntity(self, request, context):
             return stored_tokens
 
         entity_obj.delete_instance()
+
+        identifier_type = (
+            ContactType.EMAIL if entity_obj.email_hash else ContactType.PHONE
+        )
+        country_code = decode_and_decrypt(entity_obj.country_code)
+        origin = entity_obj.origin or EntityOrigin.WEB.value
+
+        stats.create(
+            event_type=StatsEventType.DELETE_ACCOUNT,
+            country_code=country_code,
+            identifier_type=identifier_type,
+            origin=EntityOrigin(origin),
+            event_stage=StatsEventStage.COMPLETE,
+        )
+
         clear_keystore(entity_obj.eid.hex)
 
         logger.info("Successfully deleted entity.")

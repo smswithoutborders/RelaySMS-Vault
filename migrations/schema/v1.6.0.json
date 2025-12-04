@@ -1,0 +1,37 @@
+[
+  {
+    "action": "drop_not_null",
+    "table": "signups",
+    "column": "country_code"
+  },
+  {
+    "action": "add_column",
+    "table": "signups",
+    "column_name": "identifier_type",
+    "field": "CharField(null=True)"
+  },
+  {
+    "action": "add_column",
+    "table": "signups",
+    "column_name": "origin",
+    "field": "CharField(null=True)"
+  },
+  {
+    "action": "add_column",
+    "table": "signups",
+    "column_name": "event_type",
+    "field": "CharField(null=True, constraints=[SQL(\"DEFAULT 'signup'\")])"
+  },
+  {
+    "action": "add_column",
+    "table": "signups",
+    "column_name": "event_stage",
+    "field": "CharField(null=True, constraints=[SQL(\"DEFAULT 'initiate'\")])"
+  },
+  {
+    "action": "add_column",
+    "table": "entities",
+    "column_name": "origin",
+    "field": "CharField(null=True)"
+  }
+]
