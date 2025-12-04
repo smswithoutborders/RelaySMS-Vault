@@ -7,18 +7,26 @@ import grpc
 
 import vault_pb2
 from base_logger import get_logger
+from src import stats
 from src.device_id import compute_device_id
 from src.entity import find_entity
 from src.long_lived_token import generate_llt
-from src.otp_service import ContactType, OTPAction
 from src.password_rate_limit import (
     clear_rate_limit,
     is_rate_limited,
     register_password_attempt,
 )
 from src.recaptcha import is_captcha_enabled
+from src.types import (
+    ContactType,
+    EntityOrigin,
+    OTPAction,
+    StatsEventStage,
+    StatsEventType,
+)
 from src.utils import (
     clear_keystore,
+    decode_and_decrypt,
     generate_keypair_and_public_key,
     hash_data,
     serialize_and_encrypt,
@@ -75,7 +83,7 @@ def AuthenticateEntity(self, request, context):
             if not captcha_success:
                 return captcha_error
 
-        _, identifier_value = self.get_identifier(request)
+        identifier_type, identifier_value = self.get_identifier(request)
         entity_lock = self._get_entity_lock(identifier_value)
         with entity_lock:
             success, pow_response = self.handle_pow_initialization(
@@ -88,6 +96,17 @@ def AuthenticateEntity(self, request, context):
             entity_obj.device_id = None
             entity_obj.server_state = None
             entity_obj.save(only=["device_id", "server_state"])
+
+            country_code = decode_and_decrypt(entity_obj.country_code)
+            origin = entity_obj.origin
+
+            stats.create(
+                event_type=StatsEventType.AUTH,
+                country_code=country_code,
+                identifier_type=identifier_type,
+                origin=EntityOrigin(origin),
+                event_stage=StatsEventStage.INITIATE,
+            )
 
             return response(
                 requires_ownership_proof=True,
@@ -118,7 +137,7 @@ def AuthenticateEntity(self, request, context):
 
         long_lived_token = generate_llt(eid, device_id_shared_key)
 
-        _, identifier_value = self.get_identifier(request)
+        identifier_type, identifier_value = self.get_identifier(request)
         entity_obj.device_id = compute_device_id(
             device_id_shared_key,
             identifier_value,
@@ -136,6 +155,17 @@ def AuthenticateEntity(self, request, context):
                 "publish_keypair",
                 "device_id_keypair",
             ]
+        )
+
+        country_code = decode_and_decrypt(entity_obj.country_code)
+        origin = entity_obj.origin
+
+        stats.create(
+            event_type=StatsEventType.AUTH,
+            country_code=country_code,
+            identifier_type=identifier_type,
+            origin=EntityOrigin(origin),
+            event_stage=StatsEventStage.COMPLETE,
         )
 
         return response(

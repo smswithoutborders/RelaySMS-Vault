@@ -6,7 +6,8 @@ from datetime import datetime, time
 
 from peewee import fn
 
-from src.db_models import Entity, Signups, Token
+from src.db_models import Entity, Stats, Token
+from src.types import ContactType, EntityOrigin, StatsEventStage, StatsEventType
 from src.utils import decode_and_decrypt
 
 
@@ -90,29 +91,36 @@ def get_signup_users(filters=None, group_by=None, options=None):
     else:
         end_date_dt = None
 
-    query = Signups.select()
+    query = Stats.select()
     if start_date:
-        query = query.where(Signups.date_created >= start_date)
+        query = query.where(Stats.date_created >= start_date)
     if end_date_dt:
-        query = query.where(Signups.date_created <= end_date_dt)
+        query = query.where(Stats.date_created <= end_date_dt)
 
     if country_code:
-        query = query.where(fn.LOWER(Signups.country_code) == country_code.lower())
+        query = query.where(fn.LOWER(Stats.country_code) == country_code.lower())
 
-    total_signup_users = query.select(fn.COUNT(Signups.id)).scalar()
+    query = query.where(
+        Stats.event_type == StatsEventType.SIGNUP.value,
+        Stats.event_stage == StatsEventStage.INITIATE.value,
+    )
+
+    total_signup_users = query.select(fn.COUNT(Stats.id)).scalar()
     total_countries = query.select(
-        fn.COUNT(fn.DISTINCT(fn.UPPER(Signups.country_code)))
+        fn.COUNT(fn.DISTINCT(fn.UPPER(Stats.country_code)))
     ).scalar()
     total_signups_from_bridges = (
-        query.select(fn.COUNT(Signups.id)).where(Signups.source == "bridges").scalar()
+        query.select(fn.COUNT(Stats.id))
+        .where(Stats.origin == EntityOrigin.BRIDGE.value)
+        .scalar()
     )
     total_signup_users_with_emails = (
-        query.select(fn.COUNT(Signups.id))
-        .where(Signups.auth_method == "email")
+        query.select(fn.COUNT(Stats.id))
+        .where(Stats.identifier_type == ContactType.EMAIL.value)
         .scalar()
     )
 
-    countries_query = query.select(fn.UPPER(Signups.country_code).distinct())
+    countries_query = query.select(fn.UPPER(Stats.country_code).distinct())
     countries = [row.country_code for row in countries_query]
 
     if group_by is None:
@@ -127,16 +135,16 @@ def get_signup_users(filters=None, group_by=None, options=None):
         }
 
     if group_by == "country":
-        country_upper = fn.UPPER(Signups.country_code).alias("country_code")
+        country_upper = fn.UPPER(Stats.country_code).alias("country_code")
         query = (
-            query.select(country_upper, fn.COUNT(Signups.id).alias("signup_users"))
+            query.select(country_upper, fn.COUNT(Stats.id).alias("signup_users"))
             .group_by(country_upper)
-            .order_by(fn.COUNT(Signups.id).desc())
+            .order_by(fn.COUNT(Stats.id).desc())
         )
     elif group_by == "date":
-        timeframe = Signups.date_created.truncate(granularity).alias("timeframe")
+        timeframe = Stats.date_created.truncate(granularity).alias("timeframe")
         query = (
-            query.select(timeframe, fn.COUNT(Signups.id).alias("signup_users"))
+            query.select(timeframe, fn.COUNT(Stats.id).alias("signup_users"))
             .group_by(timeframe)
             .order_by(timeframe.desc())
         )

@@ -1,10 +1,10 @@
-"""
-Entity Controllers
-"""
+# SPDX-License-Identifier: GPL-3.0-only
+"""Entity management functions."""
 
 from peewee import DoesNotExist
-from src.db_models import Entity
+
 from base_logger import get_logger
+from src.db_models import Entity
 
 logger = get_logger(__name__)
 database = Entity._meta.database

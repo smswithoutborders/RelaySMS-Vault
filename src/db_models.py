@@ -38,6 +38,7 @@ class Entity(Model):
     device_id_keypair = BlobField(null=True)
     server_state = BlobField(null=True)
     is_bridge_enabled = BooleanField(default=True)
+    origin = CharField(null=True, default="web", constraints=[SQL("DEFAULT 'web'")])
     language = CharField(null=True, default="en", constraints=[SQL("DEFAULT 'en'")])
     date_created = DateTimeField(default=datetime.datetime.now)
 
@@ -145,6 +146,7 @@ class OTP(Model):
         self.save(only=["attempt_count"])
 
 
+# TODO: Remove Signups model after migration to Stats is complete
 class Signups(Model):
     """Model representing Signup Attempts."""
 
@@ -153,6 +155,14 @@ class Signups(Model):
     auth_method = CharField(
         null=True, default="phone_number", constraints=[SQL("DEFAULT 'phone_number'")]
     )
+    identifier_type = CharField(null=True)
+    origin = CharField(null=True)
+    event_type = CharField(
+        null=True, default="signup", constraints=[SQL("DEFAULT 'signup'")]
+    )
+    event_stage = CharField(
+        null=True, default="initiate", constraints=[SQL("DEFAULT 'initiate'")]
+    )
     date_created = DateTimeField(default=datetime.datetime.now)
 
     class Meta:
@@ -160,6 +170,27 @@ class Signups(Model):
 
         database = database
         table_name = "signups"
+
+
+class Stats(Model):
+    """Model representing user activity statistics."""
+
+    event_type = CharField(
+        null=True, default="signup", constraints=[SQL("DEFAULT 'signup'")]
+    )
+    event_stage = CharField(
+        null=True, default="initiate", constraints=[SQL("DEFAULT 'initiate'")]
+    )
+    country_code = CharField(null=True)
+    identifier_type = CharField(null=True)
+    origin = CharField(null=True)
+    date_created = DateTimeField(default=datetime.datetime.now)
+
+    class Meta:
+        """Meta class to define database connection."""
+
+        database = database
+        table_name = "stats"
 
 
 class KeypairStatus(Enum):

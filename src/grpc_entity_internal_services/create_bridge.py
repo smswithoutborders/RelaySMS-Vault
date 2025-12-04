@@ -5,9 +5,15 @@ import grpc
 
 import vault_pb2
 from base_logger import get_logger
-from src import signups
+from src import stats
 from src.db_models import StaticKeypairs
 from src.entity import create_entity, find_entity
+from src.types import (
+    ContactType,
+    EntityOrigin,
+    StatsEventStage,
+    StatsEventType,
+)
 from src.utils import (
     clear_keystore,
     decrypt_and_deserialize,
@@ -110,11 +116,14 @@ def CreateBridgeEntity(self, request, context):
             publish_keypair=serialize_and_encrypt(server_publish_keypair_obj),
             is_bridge_enabled=True,
             language=request.language or DEFAULT_LANGUAGE,
+            origin=EntityOrigin.BRIDGE.value,
         )
-        signups.create_record(
+        stats.create(
+            event_type=StatsEventType.SIGNUP,
             country_code=request.country_code,
-            source="bridges",
-            auth_method="phone_number",
+            identifier_type=ContactType.PHONE,
+            origin=EntityOrigin.BRIDGE,
+            event_stage=StatsEventStage.INITIATE,
         )
 
         logger.info("Successfully created entity.")

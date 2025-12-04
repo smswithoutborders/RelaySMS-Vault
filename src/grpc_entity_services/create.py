@@ -7,13 +7,19 @@ import grpc
 
 import vault_pb2
 from base_logger import get_logger
-from src import signups
+from src import stats
 from src.device_id import compute_device_id
 from src.entity import create_entity, find_entity
 from src.long_lived_token import generate_llt
-from src.otp_service import ContactType, OTPAction
 from src.password_validation import validate_password_strength
 from src.recaptcha import is_captcha_enabled
+from src.types import (
+    ContactType,
+    EntityOrigin,
+    OTPAction,
+    StatsEventStage,
+    StatsEventType,
+)
 from src.utils import (
     clear_keystore,
     encrypt_and_encode,
@@ -74,6 +80,7 @@ def CreateEntity(self, request, context):
             "client_device_id_pub_key": request.client_device_id_pub_key,
             "publish_keypair": serialize_and_encrypt(entity_publish_keypair),
             "device_id_keypair": serialize_and_encrypt(entity_device_id_keypair),
+            "origin": EntityOrigin.WEB.value,
         }
         if identifier_type == ContactType.EMAIL:
             fields["email_hash"] = identifier_hash
@@ -81,6 +88,14 @@ def CreateEntity(self, request, context):
             fields["phone_number_hash"] = identifier_hash
 
         create_entity(**fields)
+
+        stats.create(
+            event_type=StatsEventType.SIGNUP,
+            country_code=request.country_code,
+            identifier_type=identifier_type,
+            origin=EntityOrigin.WEB,
+            event_stage=StatsEventStage.COMPLETE,
+        )
 
         logger.info("Entity created successfully")
 
@@ -117,12 +132,12 @@ def CreateEntity(self, request, context):
 
             message, expires = pow_response
 
-            signups.create_record(
+            stats.create(
+                event_type=StatsEventType.SIGNUP,
                 country_code=request.country_code,
-                source="platforms",
-                auth_method="email"
-                if identifier_type == ContactType.EMAIL
-                else "phone_number",
+                identifier_type=identifier_type,
+                origin=EntityOrigin.WEB,
+                event_stage=StatsEventStage.INITIATE,
             )
 
             return response(

@@ -7,14 +7,22 @@ import grpc
 
 import vault_pb2
 from base_logger import get_logger
+from src import stats
 from src.device_id import compute_device_id
 from src.entity import find_entity
 from src.long_lived_token import generate_llt
-from src.otp_service import ContactType, OTPAction
 from src.password_validation import validate_password_strength
 from src.recaptcha import is_captcha_enabled
+from src.types import (
+    ContactType,
+    EntityOrigin,
+    OTPAction,
+    StatsEventStage,
+    StatsEventType,
+)
 from src.utils import (
     clear_keystore,
+    decode_and_decrypt,
     generate_keypair_and_public_key,
     hash_data,
     serialize_and_encrypt,
@@ -28,7 +36,7 @@ def ResetPassword(self, request, context):
 
     response = vault_pb2.ResetPasswordResponse
 
-    def initiate_reset():
+    def initiate_reset(entity_obj):
         if is_captcha_enabled():
             logger.debug("Captcha verification is enabled.")
 
@@ -38,7 +46,7 @@ def ResetPassword(self, request, context):
             if not captcha_success:
                 return captcha_error
 
-        _, identifier_value = self.get_identifier(request)
+        identifier_type, identifier_value = self.get_identifier(request)
         entity_lock = self._get_entity_lock(identifier_value)
         with entity_lock:
             success, pow_response = self.handle_pow_initialization(
@@ -48,6 +56,16 @@ def ResetPassword(self, request, context):
                 return pow_response
 
             message, expires = pow_response
+
+            country_code = decode_and_decrypt(entity_obj.country_code)
+
+            stats.create(
+                event_type=StatsEventType.RESET_PASSWORD,
+                country_code=country_code,
+                identifier_type=identifier_type,
+                origin=EntityOrigin(entity_obj.origin),
+                event_stage=StatsEventStage.INITIATE,
+            )
 
             return response(
                 requires_ownership_proof=True,
@@ -81,7 +99,7 @@ def ResetPassword(self, request, context):
 
         entity_obj.password_hash = password_hash
         entity_obj.server_state = None
-        _, identifier_value = self.get_identifier(request)
+        identifier_type, identifier_value = self.get_identifier(request)
         entity_obj.device_id = compute_device_id(
             device_id_shared_key,
             identifier_value,
@@ -101,6 +119,16 @@ def ResetPassword(self, request, context):
                 "publish_keypair",
                 "device_id_keypair",
             ]
+        )
+
+        country_code = decode_and_decrypt(entity_obj.country_code)
+
+        stats.create(
+            event_type=StatsEventType.RESET_PASSWORD,
+            country_code=country_code,
+            identifier_type=identifier_type,
+            origin=EntityOrigin(entity_obj.origin),
+            event_stage=StatsEventStage.COMPLETE,
         )
 
         return response(
@@ -166,7 +194,7 @@ def ResetPassword(self, request, context):
         if request.ownership_proof_response:
             return complete_reset(entity_obj)
 
-        return initiate_reset()
+        return initiate_reset(entity_obj)
 
     except Exception as e:
         return self.handle_create_grpc_error_response(

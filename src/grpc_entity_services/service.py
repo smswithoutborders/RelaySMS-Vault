@@ -20,8 +20,9 @@ from src.grpc_entity_services.list_tokens import ListEntityStoredTokens
 from src.grpc_entity_services.reset_password import ResetPassword
 from src.grpc_entity_services.update_password import UpdateEntityPassword
 from src.long_lived_token import verify_llt
-from src.otp_service import ContactType, send_otp, verify_otp
+from src.otp_service import send_otp, verify_otp
 from src.recaptcha import verify_captcha
+from src.types import ContactType
 from src.utils import decrypt_and_deserialize, hash_data, is_valid_x25519_public_key
 
 logger = get_logger(__name__)
