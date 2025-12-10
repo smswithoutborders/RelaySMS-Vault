@@ -1,14 +1,33 @@
-"""
-Cryptographic functions.
-"""
+# SPDX-License-Identifier: GPL-3.0-only
+"""Cryptographic utilities."""
 
-import hmac
 import hashlib
+import hmac
+
+from argon2 import PasswordHasher, Type
+from argon2.exceptions import InvalidHashError, VerifyMismatchError
 from Crypto.Cipher import AES
 from cryptography.fernet import Fernet
+
 from base_logger import get_logger
+from src.utils import get_configs
 
 logger = get_logger(__name__)
+
+TIME_COST = int(get_configs("ARGON2_TIME_COST", default_value="3"))
+MEMORY_COST = int(get_configs("ARGON2_MEMORY_COST", default_value="65536"))
+PARALLELISM = int(get_configs("ARGON2_PARALLELISM", default_value="2"))
+HASH_LENGTH = int(get_configs("ARGON2_HASH_LENGTH", default_value="32"))
+SALT_LENGTH = int(get_configs("ARGON2_SALT_LENGTH", default_value="16"))
+
+argon2_ph = PasswordHasher(
+    time_cost=TIME_COST,
+    memory_cost=MEMORY_COST,
+    parallelism=PARALLELISM,
+    hash_len=HASH_LENGTH,
+    salt_len=SALT_LENGTH,
+    type=Type.ID,
+)
 
 
 def encrypt_aes(key, plaintext, is_bytes=False):
@@ -138,3 +157,40 @@ def decrypt_fernet(key, ciphertext):
     logger.debug("Decrypting ciphertext using Fernet encryption...")
     fernet = Fernet(key)
     return fernet.decrypt(ciphertext).decode("utf-8")
+
+
+def hash_password_argon2id(pepper: bytes, password: str) -> str:
+    """Hash a password using Argon2id with the provided pepper."""
+    if not pepper:
+        raise ValueError("Pepper cannot be empty")
+
+    if not password:
+        raise ValueError("Password cannot be empty")
+
+    return argon2_ph.hash(pepper + password.encode())
+
+
+def verify_password_argon2id(
+    pepper: bytes, password: str, password_hash: str
+) -> tuple[bool, bool]:
+    """
+    Verify a password against an Argon2id hash.
+
+    Returns:
+        success (bool): True if the password matches
+        needs_rehash (bool): True if the hash should be upgraded
+    """
+    if not pepper or not password or not password_hash:
+        return False, False
+
+    try:
+        argon2_ph.verify(password_hash, pepper + password.encode())
+
+        needs_rehash = argon2_ph.check_needs_rehash(password_hash)
+        return True, needs_rehash
+
+    except (VerifyMismatchError, InvalidHashError):
+        return False, False
+    except Exception as e:
+        logger.error(f"Unexpected error during password verification: {e}")
+        return False, False
