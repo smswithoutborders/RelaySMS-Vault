@@ -11,7 +11,7 @@ from src.password_rate_limit import (
     register_password_attempt,
 )
 from src.password_validation import validate_password_strength
-from src.utils import hash_data, verify_hash
+from src.utils import hash_password, verify_password
 
 logger = get_logger(__name__)
 
@@ -61,8 +61,11 @@ def UpdateEntityPassword(self, request, context):
                 grpc.StatusCode.UNAVAILABLE,
             )
 
-        if not verify_hash(request.current_password, entity_obj.password_hash):
-            register_password_attempt(entity_obj.eid)
+        register_password_attempt(entity_obj.eid)
+        is_password_valid, _ = verify_password(
+            request.current_password, entity_obj.password_hash
+        )
+        if not is_password_valid:
             return self.handle_create_grpc_error_response(
                 context,
                 response,
@@ -71,7 +74,7 @@ def UpdateEntityPassword(self, request, context):
             )
 
         clear_rate_limit(entity_obj.eid)
-        new_password_hash = hash_data(request.new_password)
+        new_password_hash = hash_password(request.new_password)
 
         entity_obj.password_hash = new_password_hash
         entity_obj.device_id = None

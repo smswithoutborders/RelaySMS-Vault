@@ -63,6 +63,9 @@ class EntityInternalService(vault_pb2_grpc.EntityInternalServicer):
             traceback.print_exception(type(error), error, error.__traceback__)
 
         error_message = f"{error_prefix}: {user_msg}" if error_prefix else user_msg
+
+        logger.error(error_message)
+
         context.set_details(error_message)
         context.set_code(status_code)
 

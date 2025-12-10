@@ -29,8 +29,9 @@ from src.utils import (
     decode_and_decrypt,
     generate_keypair_and_public_key,
     hash_data,
+    hash_password,
     serialize_and_encrypt,
-    verify_hash,
+    verify_password,
 )
 
 logger = get_logger(__name__)
@@ -59,8 +60,11 @@ def AuthenticateEntity(self, request, context):
                 message="Please reset your password to continue.",
             )
 
-        if not verify_hash(request.password, entity_obj.password_hash):
-            register_password_attempt(entity_obj.eid)
+        register_password_attempt(entity_obj.eid)
+        is_password_valid, upgrade_needed = verify_password(
+            request.password, entity_obj.password_hash
+        )
+        if not is_password_valid:
             return self.handle_create_grpc_error_response(
                 context,
                 response,
@@ -73,6 +77,14 @@ def AuthenticateEntity(self, request, context):
             )
 
         clear_rate_limit(entity_obj.eid)
+
+        if upgrade_needed:
+            try:
+                logger.info("Upgrading password hash for entity")
+                entity_obj.password_hash = hash_password(request.password)
+                entity_obj.save(only=["password_hash"])
+            except Exception as e:
+                logger.error("Failed to upgrade password hash: %s", str(e))
 
         if is_captcha_enabled():
             logger.debug("Captcha verification is enabled.")

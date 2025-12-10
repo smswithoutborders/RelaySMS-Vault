@@ -26,6 +26,7 @@ from src.utils import (
     generate_eid,
     generate_keypair_and_public_key,
     hash_data,
+    hash_password,
     serialize_and_encrypt,
 )
 
@@ -50,7 +51,7 @@ def CreateEntity(self, request, context):
         identifier_type, identifier_value = self.get_identifier(request)
         identifier_hash = hash_data(identifier_value)
         eid = generate_eid(identifier_hash)
-        password_hash = hash_data(request.password)
+        password_hash = hash_password(request.password)
         country_code_ciphertext_b64 = encrypt_and_encode(request.country_code)
 
         clear_keystore(eid)

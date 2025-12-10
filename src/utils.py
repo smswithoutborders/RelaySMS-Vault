@@ -16,7 +16,14 @@ from peewee import DatabaseError
 from smswithoutborders_libsig.keypairs import x25519
 
 from base_logger import get_logger
-from src.crypto import decrypt_aes, encrypt_aes, generate_hmac, verify_hmac
+from src.crypto import (
+    decrypt_aes,
+    encrypt_aes,
+    generate_hmac,
+    hash_password_argon2id,
+    verify_hmac,
+    verify_password_argon2id,
+)
 
 SUPPORTED_PLATFORM_FILE_PATH = "platforms.json"
 
@@ -395,6 +402,24 @@ def decrypt_data(encrypted_data: bytes) -> bytes:
         get_configs("DATA_ENCRYPTION_KEY_PRIMARY_FILE", strict=True), 32
     )
     return decrypt_aes(encryption_key, encrypted_data, is_bytes=True)
+
+
+def hash_password(password: str) -> str:
+    """Hash a password."""
+    pepper = load_and_decode_key(get_configs("PEPPER_FILE", strict=True), 32)
+
+    return hash_password_argon2id(pepper, password)
+
+
+def verify_password(password: str, password_hash: str) -> Tuple[bool, bool]:
+    """Verify a password against its hash.
+
+    Returns:
+        Tuple of (is_valid, needs_rehash).
+    """
+    pepper = load_and_decode_key(get_configs("PEPPER_FILE", strict=True), 32)
+
+    return verify_password_argon2id(pepper, password, password_hash)
 
 
 def decrypt_and_deserialize(encrypted_keypair: bytes) -> Optional[Any]:

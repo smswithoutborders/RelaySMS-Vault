@@ -25,6 +25,7 @@ from src.utils import (
     decode_and_decrypt,
     generate_keypair_and_public_key,
     hash_data,
+    hash_password,
     serialize_and_encrypt,
 )
 
@@ -81,7 +82,7 @@ def ResetPassword(self, request, context):
             return pow_response
 
         eid = entity_obj.eid.hex
-        password_hash = hash_data(request.new_password)
+        password_hash = hash_password(request.new_password)
 
         clear_keystore(eid)
         entity_publish_keypair, entity_publish_pub_key = (

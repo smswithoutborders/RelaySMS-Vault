@@ -67,6 +67,16 @@ else
   logger INFO "HMAC key file already exists at $HMAC_KEY_FILE. Skipping key generation."
 fi
 
+if [ ! -f $PEPPER_FILE ]; then
+  logger INFO "Pepper file not found at $PEPPER_FILE. Generating new pepper."
+  generate_base64_key $PEPPER_FILE || {
+    logger ERROR "Failed to generate pepper."
+    exit 1
+  }
+else
+  logger INFO "Pepper file already exists at $PEPPER_FILE. Skipping pepper generation."
+fi
+
 logger INFO "Running 'make build-setup'."
 make build-setup || {
   logger ERROR "'make build-setup' failed."
