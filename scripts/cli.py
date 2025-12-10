@@ -1,21 +1,22 @@
+# SPDX-License-Identifier: GPL-3.0-only
 """Vault CLI"""
 
-import sys
 import argparse
-from src.crypto import generate_hmac
-from src.entity import find_entity, create_entity
-from src.utils import (
-    get_configs,
-    generate_eid,
-    encrypt_and_encode,
-    clear_keystore,
-    load_key,
-)
+import sys
+
 from base_logger import get_logger
+from src.entity import create_entity, find_entity
+from src.utils import (
+    clear_keystore,
+    encrypt_and_encode,
+    generate_eid,
+    get_configs,
+    hash_data,
+    hash_password,
+)
 
 logger = get_logger("vault.cli")
 
-HASHING_KEY = load_key(get_configs("HMAC_KEY_FILE"), 32)
 DUMMY_PHONENUMBERS = get_configs(
     "DUMMY_PHONENUMBERS", default_value="+237123456789"
 ).split(",")
@@ -29,15 +30,20 @@ def create(phonenumber, password, country_code):
         logger.error("Entity phone number must be a dummy phone number.")
         sys.exit(1)
 
-    phone_number_hash = generate_hmac(HASHING_KEY, phonenumber)
+    phone_number_hash = hash_data(phonenumber)
     entity_obj = find_entity(phone_number_hash=phone_number_hash)
 
     if entity_obj:
+        if not entity_obj.password_hash:
+            logger.info("Entity exists but has no password set.")
+            entity_obj.password_hash = hash_password(password)
+            entity_obj.save(only=["password_hash"])
+
         logger.info("Entity with this phone number already exists.")
         sys.exit(0)
 
     eid = generate_eid(phone_number_hash)
-    password_hash = generate_hmac(HASHING_KEY, password)
+    password_hash = hash_password(password)
     country_code_ciphertext_b64 = encrypt_and_encode(country_code)
 
     clear_keystore(eid)

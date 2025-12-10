@@ -3,6 +3,7 @@
 
 import hashlib
 import hmac
+import os
 
 from argon2 import PasswordHasher, Type
 from argon2.exceptions import InvalidHashError, VerifyMismatchError
@@ -10,15 +11,14 @@ from Crypto.Cipher import AES
 from cryptography.fernet import Fernet
 
 from base_logger import get_logger
-from src.utils import get_configs
 
 logger = get_logger(__name__)
 
-TIME_COST = int(get_configs("ARGON2_TIME_COST", default_value="3"))
-MEMORY_COST = int(get_configs("ARGON2_MEMORY_COST", default_value="65536"))
-PARALLELISM = int(get_configs("ARGON2_PARALLELISM", default_value="2"))
-HASH_LENGTH = int(get_configs("ARGON2_HASH_LENGTH", default_value="32"))
-SALT_LENGTH = int(get_configs("ARGON2_SALT_LENGTH", default_value="16"))
+TIME_COST = int(os.getenv("ARGON2_TIME_COST", "3"))
+MEMORY_COST = int(os.getenv("ARGON2_MEMORY_COST", "65536"))
+PARALLELISM = int(os.getenv("ARGON2_PARALLELISM", "2"))
+HASH_LENGTH = int(os.getenv("ARGON2_HASH_LENGTH", "32"))
+SALT_LENGTH = int(os.getenv("ARGON2_SALT_LENGTH", "16"))
 
 argon2_ph = PasswordHasher(
     time_cost=TIME_COST,
