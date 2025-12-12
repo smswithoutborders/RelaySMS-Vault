@@ -84,6 +84,8 @@ GET /v3/metrics/signup
 | `start_date`   | string | Yes      | Start date in "YYYY-MM-DD" format.                                                   |
 | `end_date`     | string | Yes      | End date in "YYYY-MM-DD" format.                                                     |
 | `country_code` | string | No       | Country code for filtering signup users.                                             |
+| `type`         | string | No       | Identifier type filter: "phone_number" or "email_address".                           |
+| `origin`       | string | No       | Origin filter: "web" or "bridge".                                                    |
 | `granularity`  | string | No       | Granularity for date grouping: "day" or "month". Defaults to "day".                  |
 | `group_by`     | string | No       | Grouping option: "country", "date", or None. Defaults to None (returns total count). |
 | `top`          | int    | No       | Limits the number of results returned (overrides `page` and `page_size`).            |
@@ -163,6 +165,22 @@ GET /v3/metrics/signup
   }
   ```
 
+- Invalid `type` value:
+
+  ```json
+  {
+    "error": "Invalid type value. Use one of: phone_number, email_address"
+  }
+  ```
+
+- Invalid `origin` value:
+
+  ```json
+  {
+    "error": "Invalid origin value. Use one of: web, bridge"
+  }
+  ```
+
 ---
 
 ### **3. Get Retained User Metrics**
@@ -182,6 +200,8 @@ GET /v3/metrics/retained
 | `start_date`   | string | Yes      | Start date in "YYYY-MM-DD" format.                                                   |
 | `end_date`     | string | Yes      | End date in "YYYY-MM-DD" format.                                                     |
 | `country_code` | string | No       | Country code for filtering retained users.                                           |
+| `type`         | string | No       | Identifier type filter: "phone_number" or "email_address".                           |
+| `origin`       | string | No       | Origin filter: "web" or "bridge".                                                    |
 | `granularity`  | string | No       | Granularity for date grouping: "day" or "month". Defaults to "day".                  |
 | `group_by`     | string | No       | Grouping option: "country", "date", or None. Defaults to None (returns total count). |
 | `top`          | int    | No       | Limits the number of results returned (overrides `page` and `page_size`).            |
@@ -258,5 +278,21 @@ GET /v3/metrics/retained
   ```json
   {
     "error": "Invalid group_by value. Use 'country', 'date', or None."
+  }
+  ```
+
+- Invalid `type` value:
+
+  ```json
+  {
+    "error": "Invalid type value. Use one of: phone_number, email_address"
+  }
+  ```
+
+- Invalid `origin` value:
+
+  ```json
+  {
+    "error": "Invalid origin value. Use one of: web, bridge"
   }
   ```

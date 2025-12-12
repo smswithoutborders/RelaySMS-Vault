@@ -19,6 +19,8 @@ def get_signup_users(filters=None, group_by=None, options=None):
             - start_date (str): Start date for filtering records (YYYY-MM-DD).
             - end_date (str): End date for filtering records (YYYY-MM-DD).
             - country_code (str): Country code to filter results by.
+            - type (str): Identifier type to filter by (e.g., "phone_number", "email_address").
+            - origin (str): Origin to filter by (e.g., "web", "bridge").
         group_by (str, optional): Determines how the data is grouped:
             - "country": Group results by country.
             - "date": Group results by date.
@@ -52,11 +54,27 @@ def get_signup_users(filters=None, group_by=None, options=None):
     start_date = filters.get("start_date")
     end_date = filters.get("end_date")
     country_code = filters.get("country_code")
+    identifier_type = filters.get("type")
+    origin = filters.get("origin")
 
     granularity = options.get("granularity", "day")
     top = options.get("top")
     page = options.get("page", 1)
     page_size = options.get("page_size", 50)
+
+    if identifier_type is not None:
+        valid_types = {e.value for e in ContactType}
+        if identifier_type.lower() not in valid_types:
+            raise ValueError(
+                f"Invalid type value. Use one of: {', '.join(valid_types)}"
+            )
+
+    if origin is not None:
+        valid_origins = {e.value for e in EntityOrigin}
+        if origin.lower() not in valid_origins:
+            raise ValueError(
+                f"Invalid origin value. Use one of: {', '.join(valid_origins)}"
+            )
 
     if group_by not in {None, "country", "date"}:
         raise ValueError("Invalid group_by value. Use 'country', 'date', or None.")
@@ -99,6 +117,12 @@ def get_signup_users(filters=None, group_by=None, options=None):
 
     if country_code:
         query = query.where(fn.LOWER(Stats.country_code) == country_code.lower())
+
+    if identifier_type:
+        query = query.where(fn.LOWER(Stats.identifier_type) == identifier_type.lower())
+
+    if origin:
+        query = query.where(fn.LOWER(Stats.origin) == origin.lower())
 
     query = query.where(
         Stats.event_type == StatsEventType.SIGNUP.value,
@@ -202,6 +226,8 @@ def get_retained_users(filters=None, group_by=None, options=None):
             - start_date (str): Start date for filtering records (YYYY-MM-DD).
             - end_date (str): End date for filtering records (YYYY-MM-DD).
             - country_code (str): Country code to filter results by.
+            - type (str): Identifier type to filter by (e.g., "phone_number", "email_address").
+            - origin (str): Origin to filter by (e.g., "web", "bridge").
         group_by (str, optional): Determines how the data is grouped:
             - "country": Group results by country.
             - "date": Group results by date.
@@ -252,12 +278,28 @@ def get_retained_users(filters=None, group_by=None, options=None):
     start_date = filters.get("start_date")
     end_date = filters.get("end_date")
     country_code = filters.get("country_code")
+    identifier_type = filters.get("type")
+    origin = filters.get("origin")
 
     granularity = options.get("granularity", "day")
     top = options.get("top")
     page = options.get("page", 1)
     page_size = options.get("page_size", 50)
     batch_size = options.get("batch_size", 500)
+
+    if identifier_type is not None:
+        valid_types = {e.value for e in ContactType}
+        if identifier_type.lower() not in valid_types:
+            raise ValueError(
+                f"Invalid type value. Use one of: {', '.join(valid_types)}"
+            )
+
+    if origin is not None:
+        valid_origins = {e.value for e in EntityOrigin}
+        if origin.lower() not in valid_origins:
+            raise ValueError(
+                f"Invalid origin value. Use one of: {', '.join(valid_origins)}"
+            )
 
     if group_by not in {None, "country", "date"}:
         raise ValueError("Invalid group_by value. Use 'country', 'date', or None.")
@@ -297,6 +339,16 @@ def get_retained_users(filters=None, group_by=None, options=None):
         query = query.where(Entity.date_created >= start_date)
     if end_date_dt:
         query = query.where(Entity.date_created <= end_date_dt)
+
+    if identifier_type:
+        identifier_type_lower = identifier_type.lower()
+        if identifier_type_lower == ContactType.EMAIL.value:
+            query = query.where(Entity.email_hash.is_null(False))
+        elif identifier_type_lower == ContactType.PHONE.value:
+            query = query.where(Entity.phone_number_hash.is_null(False))
+
+    if origin:
+        query = query.where(fn.LOWER(Entity.origin) == origin.lower())
 
     if country_code:
         total_retained_users_with_tokens = 0

@@ -282,5 +282,5 @@ class StaticKeypairs(Model):
 
 if get_configs("MODE", default_value="development") in ("production", "development"):
     create_tables(
-        [Entity, OTPRateLimit, Token, PasswordRateLimit, OTP, Signups, StaticKeypairs]
+        [Entity, OTPRateLimit, Token, PasswordRateLimit, OTP, Stats, StaticKeypairs]
     )
