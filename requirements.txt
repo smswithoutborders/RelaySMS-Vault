@@ -1,7 +1,7 @@
 argon2-cffi==25.1.0
 asgiref==3.11.0
 Flask==3.1.2
-Flask-Cors==6.0.1
+Flask-Cors==6.0.2
 grpc-interceptor==0.15.4
 grpcio==1.76.0
 grpcio-testing==1.76.0
