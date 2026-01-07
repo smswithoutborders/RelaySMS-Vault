@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-only
-"""gRPC Entity Service"""
+"""gRPC Entity Service V2"""
 
 import base64
 import re
@@ -10,15 +10,12 @@ import weakref
 import grpc
 import phonenumbers
 
-import vault_pb2_grpc
 from base_logger import get_logger
+from protos.v2 import vault_pb2_grpc
 from src.entity import find_entity
-from src.grpc_entity_services.authenticate import AuthenticateEntity
-from src.grpc_entity_services.create import CreateEntity
-from src.grpc_entity_services.delete import DeleteEntity
-from src.grpc_entity_services.list_tokens import ListEntityStoredTokens
-from src.grpc_entity_services.reset_password import ResetPassword
-from src.grpc_entity_services.update_password import UpdateEntityPassword
+from src.grpc_entity_services.v2.authenticate import AuthenticateEntity
+from src.grpc_entity_services.v2.create import CreateEntity
+from src.grpc_entity_services.v2.reset_password import ResetPassword
 from src.long_lived_token import verify_llt
 from src.otp_service import send_otp, verify_otp
 from src.recaptcha import verify_captcha
@@ -28,8 +25,8 @@ from src.utils import decrypt_and_deserialize, hash_data, is_valid_x25519_public
 logger = get_logger(__name__)
 
 
-class EntityService(vault_pb2_grpc.EntityServicer):
-    """Entity Service Descriptor"""
+class EntityServiceV2(vault_pb2_grpc.EntityServicer):
+    """Entity Service Descriptor V2"""
 
     _entity_locks: "weakref.WeakValueDictionary[str, threading.Lock]" = (
         weakref.WeakValueDictionary()
@@ -320,7 +317,4 @@ class EntityService(vault_pb2_grpc.EntityServicer):
 
     AuthenticateEntity = AuthenticateEntity
     CreateEntity = CreateEntity
-    DeleteEntity = DeleteEntity
-    ListEntityStoredTokens = ListEntityStoredTokens
     ResetPassword = ResetPassword
-    UpdateEntityPassword = UpdateEntityPassword

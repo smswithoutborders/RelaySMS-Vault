@@ -5,8 +5,8 @@ import base64
 
 import grpc
 
-import vault_pb2
 from base_logger import get_logger
+from protos.v1 import vault_pb2
 from src import stats
 from src.device_id import compute_device_id
 from src.entity import create_entity, find_entity

@@ -5,8 +5,8 @@ import base64
 
 import grpc
 
-import vault_pb2
 from base_logger import get_logger
+from protos.v1 import vault_pb2
 from src.entity import find_entity
 from src.relaysms_payload import decode_relay_sms_payload, decrypt_payload
 from src.utils import (

@@ -3,8 +3,8 @@
 
 import grpc
 
-import vault_pb2
 from base_logger import get_logger
+from protos.v1 import vault_pb2
 from src import stats
 from src.db_models import StaticKeypairs
 from src.entity import create_entity, find_entity

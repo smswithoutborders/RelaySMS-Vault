@@ -36,12 +36,14 @@ start-rest-api:
 
 grpc-compile:
 	$(call log_message,[INFO] Compiling gRPC protos ...)
-	@$(PYTHON) -m grpc_tools.protoc \
-		-I./protos/v1 \
-		--python_out=. \
-		--pyi_out=. \
-		--grpc_python_out=. \
-		./protos/v1/*.proto
+	@for v in v1 v2; do \
+		$(PYTHON) -m grpc_tools.protoc \
+			--proto_path=. \
+			--python_out=. \
+			--pyi_out=. \
+			--grpc_python_out=. \
+			./protos/$$v/vault.proto ; \
+	done
 	$(call log_message,[INFO] gRPC Compilation complete!)
 
 grpc-server-start:

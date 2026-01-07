@@ -3,8 +3,8 @@
 
 import grpc
 
-import vault_pb2
 from base_logger import get_logger
+from protos.v1 import vault_pb2
 from src.tokens import create_entity_token, find_token
 from src.utils import encrypt_and_encode, get_supported_platforms, hash_data
 

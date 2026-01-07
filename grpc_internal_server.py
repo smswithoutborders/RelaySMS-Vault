@@ -7,8 +7,8 @@ from concurrent import futures
 import grpc
 from grpc_interceptor import ServerInterceptor
 
-import vault_pb2_grpc
 from base_logger import get_logger
+from protos.v1 import vault_pb2_grpc
 from src.grpc_entity_internal_services.service import EntityInternalService
 from src.utils import get_configs
 

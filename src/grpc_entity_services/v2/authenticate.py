@@ -1,0 +1,223 @@
+# SPDX-License-Identifier: GPL-3.0-only
+"""Authenticate Entity gRPC service implementation."""
+
+import base64
+
+import grpc
+
+from base_logger import get_logger
+from protos.v2 import vault_pb2
+from src import stats
+from src.device_id import compute_device_id
+from src.entity import find_entity
+from src.long_lived_token import generate_llt
+from src.password_rate_limit import (
+    clear_rate_limit,
+    is_rate_limited,
+    register_password_attempt,
+)
+from src.recaptcha import is_captcha_enabled
+from src.types import (
+    ContactType,
+    EntityOrigin,
+    OTPAction,
+    StatsEventStage,
+    StatsEventType,
+)
+from src.utils import (
+    clear_keystore,
+    decode_and_decrypt,
+    generate_keypair_and_public_key,
+    hash_data,
+    hash_password,
+    serialize_and_encrypt,
+    verify_password,
+)
+
+logger = get_logger(__name__)
+
+
+def AuthenticateEntity(self, request, context):
+    """Handles the authentication of an entity."""
+
+    response = vault_pb2.AuthenticateEntityResponse
+
+    if hasattr(request, "phone_number"):
+        request.phone_number = self.clean_phone_number(request.phone_number)
+
+    def initiate_authentication(entity_obj):
+        if is_rate_limited(entity_obj.eid):
+            return self.handle_create_grpc_error_response(
+                context,
+                response,
+                "Too many password attempts. Please wait and try again later.",
+                grpc.StatusCode.UNAVAILABLE,
+            )
+
+        if not entity_obj.password_hash:
+            return response(
+                requires_password_reset=True,
+                message="Please reset your password to continue.",
+            )
+
+        register_password_attempt(entity_obj.eid)
+        is_password_valid, upgrade_needed = verify_password(
+            request.password, entity_obj.password_hash
+        )
+        if not is_password_valid:
+            return self.handle_create_grpc_error_response(
+                context,
+                response,
+                "Incorrect Password provided.",
+                grpc.StatusCode.UNAUTHENTICATED,
+                user_msg=(
+                    "Incorrect credentials. Please double-check "
+                    "your details and try again."
+                ),
+            )
+
+        clear_rate_limit(entity_obj.eid)
+
+        if upgrade_needed:
+            try:
+                logger.info("Upgrading password hash for entity")
+                entity_obj.password_hash = hash_password(request.password)
+                entity_obj.save(only=["password_hash"])
+            except Exception as e:
+                logger.error("Failed to upgrade password hash: %s", str(e))
+
+        if is_captcha_enabled():
+            logger.debug("Captcha verification is enabled.")
+
+            captcha_success, captcha_error = self.handle_captcha_verification(
+                context, request, response
+            )
+            if not captcha_success:
+                return captcha_error
+
+        identifier_type, identifier_value = self.get_identifier(request)
+        entity_lock = self._get_entity_lock(identifier_value)
+        with entity_lock:
+            success, pow_response = self.handle_pow_initialization(
+                context, request, response, OTPAction.AUTH
+            )
+            if not success:
+                return pow_response
+
+            message, expires = pow_response
+            entity_obj.device_id = None
+            entity_obj.server_state = None
+            entity_obj.save(only=["device_id", "server_state"])
+
+            country_code = decode_and_decrypt(entity_obj.country_code)
+            origin = entity_obj.origin
+
+            stats.create(
+                event_type=StatsEventType.AUTH,
+                country_code=country_code,
+                identifier_type=identifier_type,
+                origin=EntityOrigin(origin),
+                event_stage=StatsEventStage.INITIATE,
+            )
+
+            return response(
+                requires_ownership_proof=True,
+                message=message,
+                next_attempt_timestamp=expires,
+            )
+
+    def complete_authentication(entity_obj):
+        success, pow_response = self.handle_pow_verification(
+            context, request, response, OTPAction.AUTH
+        )
+        if not success:
+            return pow_response
+
+        eid = entity_obj.eid.hex
+
+        clear_keystore(eid)
+        entity_publish_keypair, entity_publish_pub_key = (
+            generate_keypair_and_public_key(eid, "publish")
+        )
+        entity_device_id_keypair, entity_device_id_pub_key = (
+            generate_keypair_and_public_key(eid, "device_id")
+        )
+
+        device_id_shared_key = entity_device_id_keypair.agree(
+            base64.b64decode(request.client_device_id_pub_key)
+        )
+
+        long_lived_token = generate_llt(eid, device_id_shared_key)
+
+        identifier_type, identifier_value = self.get_identifier(request)
+        entity_obj.device_id = compute_device_id(
+            device_id_shared_key,
+            identifier_value,
+            base64.b64decode(request.client_device_id_pub_key),
+        )
+        entity_obj.client_publish_pub_key = request.client_publish_pub_key
+        entity_obj.client_device_id_pub_key = request.client_device_id_pub_key
+        entity_obj.publish_keypair = serialize_and_encrypt(entity_publish_keypair)
+        entity_obj.device_id_keypair = serialize_and_encrypt(entity_device_id_keypair)
+        entity_obj.save(
+            only=[
+                "device_id",
+                "client_publish_pub_key",
+                "client_device_id_pub_key",
+                "publish_keypair",
+                "device_id_keypair",
+            ]
+        )
+
+        country_code = decode_and_decrypt(entity_obj.country_code)
+        origin = entity_obj.origin
+
+        stats.create(
+            event_type=StatsEventType.AUTH,
+            country_code=country_code,
+            identifier_type=identifier_type,
+            origin=EntityOrigin(origin),
+            event_stage=StatsEventStage.COMPLETE,
+        )
+
+        return response(
+            long_lived_token=long_lived_token,
+            message="Entity authenticated successfully!",
+            server_publish_pub_key=base64.b64encode(entity_publish_pub_key).decode(
+                "utf-8"
+            ),
+            server_device_id_pub_key=base64.b64encode(entity_device_id_pub_key).decode(
+                "utf-8"
+            ),
+        )
+
+    def validate_fields():
+        return self.handle_request_field_validation(
+            context,
+            request,
+            response,
+            [
+                ("phone_number", "email_address"),
+                "password",
+                "client_publish_pub_key",
+                "client_device_id_pub_key",
+            ],
+        )
+
+    try:
+        return self.handle_create_grpc_error_response(
+            context,
+            response,
+            "This method is deprecated. Please use v2 AuthenticateEntity method.",
+            grpc.StatusCode.UNIMPLEMENTED,
+        )
+
+    except Exception as e:
+        return self.handle_create_grpc_error_response(
+            context,
+            response,
+            e,
+            grpc.StatusCode.INTERNAL,
+            user_msg="Oops! Something went wrong. Please try again later.",
+            error_type="UNKNOWN",
+        )
