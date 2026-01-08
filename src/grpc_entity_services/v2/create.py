@@ -1,16 +1,15 @@
 # SPDX-License-Identifier: GPL-3.0-only
 """Create Entity gRPC service implementation."""
 
-import base64
+import secrets
 
 import grpc
 
 from base_logger import get_logger
 from protos.v2 import vault_pb2
 from src import stats
-from src.device_id import compute_device_id
+from src.device_id import derive_device_id_v1
 from src.entity import create_entity, find_entity
-from src.long_lived_token import generate_llt
 from src.password_validation import validate_password_strength
 from src.recaptcha import is_captcha_enabled
 from src.types import (
@@ -23,6 +22,7 @@ from src.types import (
 from src.utils import (
     clear_keystore,
     encrypt_and_encode,
+    encrypt_data,
     generate_eid,
     generate_keypair_and_public_key,
     hash_data,
@@ -41,54 +41,41 @@ def CreateEntity(self, request, context):
     if hasattr(request, "phone_number"):
         request.phone_number = self.clean_phone_number(request.phone_number)
 
-    def complete_creation():
+    def complete_creation(entity_obj):
         success, pow_response = self.handle_pow_verification(
             context, request, response, OTPAction.SIGNUP
         )
         if not success:
             return pow_response
 
-        identifier_type, identifier_value = self.get_identifier(request)
-        identifier_hash = hash_data(identifier_value)
-        eid = generate_eid(identifier_hash)
-        password_hash = hash_password(request.password)
-        country_code_ciphertext_b64 = encrypt_and_encode(request.country_code)
+        identifier_type, _ = self.get_identifier(request)
+        eid = entity_obj.eid.hex
 
-        clear_keystore(eid)
-        entity_publish_keypair, entity_publish_pub_key = (
-            generate_keypair_and_public_key(eid, "publish")
+        clear_keystore(eid, "ratchet")
+        identity_key_success, server_identity_response = self.get_server_identity_key(
+            context, response
         )
-        entity_device_id_keypair, entity_device_id_pub_key = (
-            generate_keypair_and_public_key(eid, "device_id")
+        if not identity_key_success:
+            return server_identity_response
+
+        server_ratchet_keypair, server_ratchet_pub_key = (
+            generate_keypair_and_public_key(eid, "ratchet")
         )
+        server_nonce = secrets.token_bytes(16)
 
-        device_id_shared_key = entity_device_id_keypair.agree(
-            base64.b64decode(request.client_device_id_pub_key)
+        # long_lived_token = generate_llt(eid, device_id_shared_key)
+
+        entity_obj.server_ratchet_keypair = serialize_and_encrypt(
+            server_ratchet_keypair
         )
-
-        long_lived_token = generate_llt(eid, device_id_shared_key)
-
-        fields = {
-            "eid": eid,
-            "password_hash": password_hash,
-            "country_code": country_code_ciphertext_b64,
-            "device_id": compute_device_id(
-                device_id_shared_key,
-                identifier_value,
-                base64.b64decode(request.client_device_id_pub_key),
-            ),
-            "client_publish_pub_key": request.client_publish_pub_key,
-            "client_device_id_pub_key": request.client_device_id_pub_key,
-            "publish_keypair": serialize_and_encrypt(entity_publish_keypair),
-            "device_id_keypair": serialize_and_encrypt(entity_device_id_keypair),
-            "origin": EntityOrigin.WEB.value,
-        }
-        if identifier_type == ContactType.EMAIL:
-            fields["email_hash"] = identifier_hash
-        if identifier_type == ContactType.PHONE:
-            fields["phone_number_hash"] = identifier_hash
-
-        create_entity(**fields)
+        entity_obj.server_nonce = encrypt_data(server_nonce)
+        entity_obj.device_id = derive_device_id_v1(
+            client_id_pub_key=entity_obj.client_id_pub_key
+        ).hex()
+        entity_obj.is_verified = True
+        entity_obj.save(
+            only=["server_ratchet_keypair", "server_nonce", "device_id", "is_verified"]
+        )
 
         stats.create(
             event_type=StatsEventType.SIGNUP,
@@ -101,17 +88,37 @@ def CreateEntity(self, request, context):
         logger.info("Entity created successfully")
 
         return response(
-            long_lived_token=long_lived_token,
+            long_lived_token="",
             message="Entity created successfully",
-            server_publish_pub_key=base64.b64encode(entity_publish_pub_key).decode(
-                "utf-8"
-            ),
-            server_device_id_pub_key=base64.b64encode(entity_device_id_pub_key).decode(
-                "utf-8"
-            ),
+            server_ratchet_pub_key=server_ratchet_pub_key,
+            server_nonce=server_nonce,
         )
 
-    def initiate_creation():
+    def initiate_creation(entity_obj):
+        invalid_fields = self.handle_request_field_validation(
+            context,
+            request,
+            response,
+            [
+                "country_code",
+                "password",
+                "client_id_pub_key",
+                "client_ratchet_pub_key",
+                "client_nonce",
+            ],
+        )
+        if invalid_fields:
+            return invalid_fields
+
+        password_error = validate_password_strength(request.password)
+        if password_error:
+            return self.handle_create_grpc_error_response(
+                context,
+                response,
+                password_error,
+                grpc.StatusCode.INVALID_ARGUMENT,
+            )
+
         if is_captcha_enabled():
             logger.debug("Captcha verification is enabled.")
 
@@ -122,6 +129,9 @@ def CreateEntity(self, request, context):
                 return captcha_error
 
         identifier_type, identifier_value = self.get_identifier(request)
+        identifier_hash = hash_data(identifier_value)
+        password_hash = hash_password(request.password)
+        country_code_ciphertext_b64 = encrypt_and_encode(request.country_code)
         entity_lock = self._get_entity_lock(identifier_value)
         with entity_lock:
             success, pow_response = self.handle_pow_initialization(
@@ -132,6 +142,39 @@ def CreateEntity(self, request, context):
                 return pow_response
 
             message, expires = pow_response
+            if entity_obj:
+                entity_obj.password_hash = password_hash
+                entity_obj.country_code = country_code_ciphertext_b64
+                entity_obj.client_id_pub_key = request.client_id_pub_key
+                entity_obj.client_ratchet_pub_key = request.client_ratchet_pub_key
+                entity_obj.client_nonce = request.client_nonce
+                entity_obj.save(
+                    only=[
+                        "password_hash",
+                        "country_code",
+                        "client_id_pub_key",
+                        "client_ratchet_pub_key",
+                        "client_nonce",
+                    ]
+                )
+            else:
+                eid = generate_eid(identifier_hash)
+                fields = {
+                    "eid": eid,
+                    "password_hash": password_hash,
+                    "country_code": country_code_ciphertext_b64,
+                    "client_id_pub_key": request.client_id_pub_key,
+                    "client_ratchet_pub_key": request.client_ratchet_pub_key,
+                    "client_nonce": encrypt_data(request.client_nonce),
+                    "origin": EntityOrigin.WEB.value,
+                    "is_verified": False,
+                }
+                if identifier_type == ContactType.EMAIL:
+                    fields["email_hash"] = identifier_hash
+                if identifier_type == ContactType.PHONE:
+                    fields["phone_number_hash"] = identifier_hash
+
+                create_entity(**fields)
 
             stats.create(
                 event_type=StatsEventType.SIGNUP,
@@ -147,37 +190,15 @@ def CreateEntity(self, request, context):
                 next_attempt_timestamp=expires,
             )
 
-    def validate_fields():
+    try:
         invalid_fields = self.handle_request_field_validation(
             context,
             request,
             response,
-            [
-                ("phone_number", "email_address"),
-                "country_code",
-                "password",
-                "client_publish_pub_key",
-                "client_device_id_pub_key",
-            ],
+            [("phone_number", "email_address")],
         )
         if invalid_fields:
             return invalid_fields
-
-        password_error = validate_password_strength(request.password)
-        if password_error:
-            return self.handle_create_grpc_error_response(
-                context,
-                response,
-                password_error,
-                grpc.StatusCode.INVALID_ARGUMENT,
-            )
-
-        return None
-
-    try:
-        invalid_fields_response = validate_fields()
-        if invalid_fields_response:
-            return invalid_fields_response
 
         identifier_type, identifier_value = self.get_identifier(request)
         if identifier_type == ContactType.EMAIL:
@@ -189,7 +210,7 @@ def CreateEntity(self, request, context):
             phone_number_hash = hash_data(phone_number)
             entity_obj = find_entity(phone_number_hash=phone_number_hash)
 
-        if entity_obj:
+        if entity_obj and entity_obj.is_verified:
             return self.handle_create_grpc_error_response(
                 context,
                 response,
@@ -198,9 +219,9 @@ def CreateEntity(self, request, context):
             )
 
         if request.ownership_proof_response:
-            return complete_creation()
+            return complete_creation(entity_obj)
 
-        return initiate_creation()
+        return initiate_creation(entity_obj)
 
     except Exception as e:
         return self.handle_create_grpc_error_response(

@@ -1,5 +1,16 @@
 # Changelog
 
+## [v1.8.0] - 2026-01-08
+
+### Added
+
+- Added a new column `client_id_pub_key` of type `BlobField(null=True)` to the `entities` table to store client identity public keys.
+- Added a new column `client_ratchet_pub_key` of type `BlobField(null=True)` to the `entities` table to store client ratchet public keys.
+- Added a new column `client_nonce` of type `BlobField(null=True)` to the `entities` table to store client nonce values.
+- Added a new column `server_ratchet_keypair` of type `BlobField(null=True)` to the `entities` table to store server ratchet keypairs.
+- Added a new column `server_nonce` of type `BlobField(null=True)` to the `entities` table to store server nonce values.
+- Added a new column `is_verified` of type `BooleanField(default=True)` to the `entities` table to track entity verification status.
+
 ## [v1.7.0] - 2025-12-04
 
 ### Changed

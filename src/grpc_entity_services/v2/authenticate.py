@@ -1,16 +1,15 @@
 # SPDX-License-Identifier: GPL-3.0-only
 """Authenticate Entity gRPC service implementation."""
 
-import base64
+import secrets
 
 import grpc
 
 from base_logger import get_logger
 from protos.v2 import vault_pb2
 from src import stats
-from src.device_id import compute_device_id
+from src.device_id import derive_device_id_v1
 from src.entity import find_entity
-from src.long_lived_token import generate_llt
 from src.password_rate_limit import (
     clear_rate_limit,
     is_rate_limited,
@@ -27,6 +26,7 @@ from src.types import (
 from src.utils import (
     clear_keystore,
     decode_and_decrypt,
+    encrypt_data,
     generate_keypair_and_public_key,
     hash_data,
     hash_password,
@@ -46,6 +46,20 @@ def AuthenticateEntity(self, request, context):
         request.phone_number = self.clean_phone_number(request.phone_number)
 
     def initiate_authentication(entity_obj):
+        invalid_fields = self.handle_request_field_validation(
+            context,
+            request,
+            response,
+            [
+                "password",
+                "client_id_pub_key",
+                "client_ratchet_pub_key",
+                "client_nonce",
+            ],
+        )
+        if invalid_fields:
+            return invalid_fields
+
         if is_rate_limited(entity_obj.eid):
             return self.handle_create_grpc_error_response(
                 context,
@@ -107,7 +121,18 @@ def AuthenticateEntity(self, request, context):
             message, expires = pow_response
             entity_obj.device_id = None
             entity_obj.server_state = None
-            entity_obj.save(only=["device_id", "server_state"])
+            entity_obj.client_id_pub_key = request.client_id_pub_key
+            entity_obj.client_ratchet_pub_key = request.client_ratchet_pub_key
+            entity_obj.client_nonce = request.client_nonce
+            entity_obj.save(
+                only=[
+                    "device_id",
+                    "server_state",
+                    "client_id_pub_key",
+                    "client_ratchet_pub_key",
+                    "client_nonce",
+                ]
+            )
 
             country_code = decode_and_decrypt(entity_obj.country_code)
             origin = entity_obj.origin
@@ -135,39 +160,28 @@ def AuthenticateEntity(self, request, context):
 
         eid = entity_obj.eid.hex
 
-        clear_keystore(eid)
-        entity_publish_keypair, entity_publish_pub_key = (
-            generate_keypair_and_public_key(eid, "publish")
+        clear_keystore(eid, "ratchet")
+        identity_key_success, server_identity_response = self.get_server_identity_key(
+            context, response
         )
-        entity_device_id_keypair, entity_device_id_pub_key = (
-            generate_keypair_and_public_key(eid, "device_id")
-        )
+        if not identity_key_success:
+            return server_identity_response
 
-        device_id_shared_key = entity_device_id_keypair.agree(
-            base64.b64decode(request.client_device_id_pub_key)
+        server_ratchet_keypair, server_ratchet_pub_key = (
+            generate_keypair_and_public_key(eid, "ratchet")
         )
+        server_nonce = secrets.token_bytes(16)
 
-        long_lived_token = generate_llt(eid, device_id_shared_key)
+        # long_lived_token = generate_llt(eid, device_id_shared_key)
 
-        identifier_type, identifier_value = self.get_identifier(request)
-        entity_obj.device_id = compute_device_id(
-            device_id_shared_key,
-            identifier_value,
-            base64.b64decode(request.client_device_id_pub_key),
+        entity_obj.server_ratchet_keypair = serialize_and_encrypt(
+            server_ratchet_keypair
         )
-        entity_obj.client_publish_pub_key = request.client_publish_pub_key
-        entity_obj.client_device_id_pub_key = request.client_device_id_pub_key
-        entity_obj.publish_keypair = serialize_and_encrypt(entity_publish_keypair)
-        entity_obj.device_id_keypair = serialize_and_encrypt(entity_device_id_keypair)
-        entity_obj.save(
-            only=[
-                "device_id",
-                "client_publish_pub_key",
-                "client_device_id_pub_key",
-                "publish_keypair",
-                "device_id_keypair",
-            ]
-        )
+        entity_obj.server_nonce = encrypt_data(server_nonce)
+        entity_obj.device_id = derive_device_id_v1(
+            client_id_pub_key=entity_obj.client_id_pub_key
+        ).hex()
+        entity_obj.save(only=["server_ratchet_keypair", "server_nonce", "device_id"])
 
         country_code = decode_and_decrypt(entity_obj.country_code)
         origin = entity_obj.origin
@@ -181,36 +195,44 @@ def AuthenticateEntity(self, request, context):
         )
 
         return response(
-            long_lived_token=long_lived_token,
-            message="Entity authenticated successfully!",
-            server_publish_pub_key=base64.b64encode(entity_publish_pub_key).decode(
-                "utf-8"
-            ),
-            server_device_id_pub_key=base64.b64encode(entity_device_id_pub_key).decode(
-                "utf-8"
-            ),
-        )
-
-    def validate_fields():
-        return self.handle_request_field_validation(
-            context,
-            request,
-            response,
-            [
-                ("phone_number", "email_address"),
-                "password",
-                "client_publish_pub_key",
-                "client_device_id_pub_key",
-            ],
+            long_lived_token="",
+            message="Entity authenticated successfully",
+            server_ratchet_pub_key=server_ratchet_pub_key,
+            server_nonce=server_nonce,
         )
 
     try:
-        return self.handle_create_grpc_error_response(
+        invalid_fields = self.handle_request_field_validation(
             context,
+            request,
             response,
-            "This method is deprecated. Please use v2 AuthenticateEntity method.",
-            grpc.StatusCode.UNIMPLEMENTED,
+            [("phone_number", "email_address")],
         )
+        if invalid_fields:
+            return invalid_fields
+
+        identifier_type, identifier_value = self.get_identifier(request)
+        if identifier_type == ContactType.EMAIL:
+            email_address = identifier_value
+            email_address_hash = hash_data(email_address)
+            entity_obj = find_entity(email_hash=email_address_hash)
+        else:
+            phone_number = identifier_value
+            phone_number_hash = hash_data(phone_number)
+            entity_obj = find_entity(phone_number_hash=phone_number_hash)
+
+        if not entity_obj or not entity_obj.is_verified:
+            return self.handle_create_grpc_error_response(
+                context,
+                response,
+                f"Entity with this {identifier_type.value} not found.",
+                grpc.StatusCode.NOT_FOUND,
+            )
+
+        if request.ownership_proof_response:
+            return complete_authentication(entity_obj)
+
+        return initiate_authentication(entity_obj)
 
     except Exception as e:
         return self.handle_create_grpc_error_response(

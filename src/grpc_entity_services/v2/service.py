@@ -12,6 +12,7 @@ import phonenumbers
 
 from base_logger import get_logger
 from protos.v2 import vault_pb2_grpc
+from src.db_models import StaticKeypairs
 from src.entity import find_entity
 from src.grpc_entity_services.v2.authenticate import AuthenticateEntity
 from src.grpc_entity_services.v2.create import CreateEntity
@@ -23,6 +24,9 @@ from src.types import ContactType
 from src.utils import decrypt_and_deserialize, hash_data, is_valid_x25519_public_key
 
 logger = get_logger(__name__)
+
+STATIC_KEYPAIR_VERSION = "v1"
+STATIC_KEYPAIR_IDENTIFIER = 254
 
 
 class EntityServiceV2(vault_pb2_grpc.EntityServicer):
@@ -314,6 +318,37 @@ class EntityServiceV2(vault_pb2_grpc.EntityServicer):
         if email_address:
             return ContactType.EMAIL, email_address
         return ContactType.PHONE, phone_number
+
+    def get_server_identity_key(self, context, response):
+        """Handles getting server identity key."""
+        server_static_keypair_record = StaticKeypairs.get_keypair(
+            STATIC_KEYPAIR_IDENTIFIER, STATIC_KEYPAIR_VERSION
+        )
+        if (
+            not server_static_keypair_record
+            or server_static_keypair_record.status != "active"
+        ):
+            status = "not found" if not server_static_keypair_record else "not active"
+            error_msg = (
+                "The server public key identifier "
+                f"'{STATIC_KEYPAIR_IDENTIFIER}' for version "
+                f"{STATIC_KEYPAIR_VERSION} is {status}."
+            )
+            logger.error(error_msg)
+            error_response = self.handle_create_grpc_error_response(
+                context,
+                response,
+                error_msg,
+                grpc.StatusCode.INTERNAL,
+                user_msg="Oops! Something went wrong. Please try again later.",
+            )
+
+            return False, error_response
+
+        server_identity_keypair = decrypt_and_deserialize(
+            server_static_keypair_record.keypair_bytes
+        )
+        return True, server_identity_keypair
 
     AuthenticateEntity = AuthenticateEntity
     CreateEntity = CreateEntity

@@ -6,16 +6,17 @@
 Applies schema changes defined in JSON migration spec files.
 """
 
-import os
-import logging
-import json
 import argparse
 import ast
+import json
+import logging
+import os
 import re
-from typing import List, Dict, Any
+from typing import Any, Dict, List
 
 import peewee
 from playhouse.migrate import MySQLMigrator, migrate
+
 from src.db import connect
 
 logging.basicConfig(level="DEBUG")
@@ -33,6 +34,8 @@ migrator = MySQLMigrator(db)
 ALLOWED_FIELDS = {
     "CharField": peewee.CharField,
     "BooleanField": peewee.BooleanField,
+    "BlobField": peewee.BlobField,
+    "TextField": peewee.TextField,
 }
 
 ALLOWED_FUNCTIONS = {

@@ -1,0 +1,38 @@
+[
+  {
+    "action": "add_column",
+    "table": "entities",
+    "column_name": "client_id_pub_key",
+    "field": "BlobField(null=True)"
+  },
+  {
+    "action": "add_column",
+    "table": "entities",
+    "column_name": "client_ratchet_pub_key",
+    "field": "BlobField(null=True)"
+  },
+  {
+    "action": "add_column",
+    "table": "entities",
+    "column_name": "client_nonce",
+    "field": "BlobField(null=True)"
+  },
+  {
+    "action": "add_column",
+    "table": "entities",
+    "column_name": "server_ratchet_keypair",
+    "field": "BlobField(null=True)"
+  },
+  {
+    "action": "add_column",
+    "table": "entities",
+    "column_name": "server_nonce",
+    "field": "BlobField(null=True)"
+  },
+  {
+    "action": "add_column",
+    "table": "entities",
+    "column_name": "is_verified",
+    "field": "BooleanField(default=True)"
+  }
+]
