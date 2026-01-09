@@ -8,8 +8,10 @@ import grpc
 from grpc_interceptor import ServerInterceptor
 
 from base_logger import get_logger
-from protos.v1 import vault_pb2_grpc
-from src.grpc_entity_internal_services.service import EntityInternalService
+from protos.v1 import vault_pb2_grpc as v1_grpc
+from protos.v2 import vault_pb2_grpc as v2_grpc
+from src.grpc_entity_internal_services.v1.service import EntityInternalServiceV1
+from src.grpc_entity_internal_services.v2.service import EntityInternalServiceV2
 from src.utils import get_configs
 
 logger = get_logger("vault.grpc.internal.server")
@@ -63,7 +65,8 @@ def serve():
         futures.ThreadPoolExecutor(max_workers=max_workers),
         interceptors=[LoggingInterceptor()],
     )
-    vault_pb2_grpc.add_EntityInternalServicer_to_server(EntityInternalService(), server)
+    v1_grpc.add_EntityInternalServicer_to_server(EntityInternalServiceV1(), server)
+    v2_grpc.add_EntityInternalServicer_to_server(EntityInternalServiceV2(), server)
 
     if mode == "production":
         server_certificate = get_configs("SSL_CERTIFICATE")

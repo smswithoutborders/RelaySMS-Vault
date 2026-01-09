@@ -5,6 +5,7 @@ Module for handling encryption, decryption, encoding, and decoding of RelaySMS p
 import base64
 import struct
 
+from smswithoutborders_libsig.keypairs import x25519
 from smswithoutborders_libsig.ratchets import HEADERS, Ratchets, States
 
 from base_logger import get_logger
@@ -13,36 +14,35 @@ logger = get_logger(__name__)
 
 
 def decrypt_payload(
-    server_state, publish_keypair, ratchet_header, encrypted_content, **kwargs
+    root_key: bytes,
+    encrypted_content: bytes,
+    server_identity_keypair: x25519,
+    ratchet_header: bytes,
+    server_state: bytes,
 ):
     """
     Decrypts a RelaySMS payload.
 
     Args:
-        server_state (bytes or None): Current state of the server-side ratchet.
-            If None, initializes a new state.
-        keypair (object): Object containing encryption and decryption keys.
+        root_key (bytes): Root key for the ratchet.
+        encrypted_content (bytes): Encrypted content to decrypt.
+        server_identity_keypair (x25519): Server's identity keypair.
         ratchet_header (bytes): Ratchet header.
-        encrypted_content (bytes): Encrypted content to be decrypted.
-        kwargs (dict): Additional keyword arguments:
-            - publish_shared_key (bytes): Publish shared key.
-            - client_pub_key (bytes): Client's public key for decryption.
+        server_state (bytes): Current state of the server-side ratchet.
 
     Returns:
         tuple:
-            - plaintext (str): Decrypted plaintext content.
-            - state (bytes): Updated server state.
+            - plaintext (bytes): Decrypted content.
+            - state (States): Updated server state.
             - error (Exception or None)
     """
-    publish_shared_key = kwargs.get("publish_shared_key")
-    publish_pub_key = kwargs.get("publish_pub_key")
     logger.debug("Ciphertext: %s", encrypted_content)
 
     try:
         if not server_state:
             state = States()
             logger.debug("Initializing ratchet...")
-            Ratchets.bob_init(state, publish_shared_key, publish_keypair)
+            Ratchets.bob_init(state, root_key, server_identity_keypair)
         else:
             logger.debug("Deserializing state...")
             logger.debug("Current state: %s", server_state)
@@ -53,7 +53,10 @@ def decrypt_payload(
         header = HEADERS.deserialize(ratchet_header)
         logger.debug("Decrypting content...")
         plaintext = Ratchets.decrypt(
-            state=state, header=header, ciphertext=encrypted_content, AD=publish_pub_key
+            state=state,
+            header=header,
+            ciphertext=encrypted_content,
+            AD=server_identity_keypair.get_public_key(),
         )
         logger.debug("Plaintext: %s", plaintext)
         return plaintext, state, None

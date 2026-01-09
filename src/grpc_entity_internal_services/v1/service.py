@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-only
-"""gRPC Entity Internal Service"""
+"""gRPC Entity Internal Service V1"""
 
 import base64
 import re
@@ -13,23 +13,23 @@ import phonenumbers
 from base_logger import get_logger
 from protos.v1 import vault_pb2_grpc
 from src.entity import find_entity
-from src.grpc_entity_internal_services.authenticate_bridge import (
+from src.grpc_entity_internal_services.v1.authenticate_bridge import (
     AuthenticateBridgeEntity,
 )
-from src.grpc_entity_internal_services.create_bridge import CreateBridgeEntity
-from src.grpc_entity_internal_services.decrypt_payloads import DecryptPayload
-from src.grpc_entity_internal_services.delete_token import DeleteEntityToken
-from src.grpc_entity_internal_services.encrypt_payloads import EncryptPayload
-from src.grpc_entity_internal_services.get_token import GetEntityAccessToken
-from src.grpc_entity_internal_services.store_token import StoreEntityToken
-from src.grpc_entity_internal_services.update_token import UpdateEntityToken
+from src.grpc_entity_internal_services.v1.create_bridge import CreateBridgeEntity
+from src.grpc_entity_internal_services.v1.decrypt_payloads import DecryptPayload
+from src.grpc_entity_internal_services.v1.delete_token import DeleteEntityToken
+from src.grpc_entity_internal_services.v1.encrypt_payloads import EncryptPayload
+from src.grpc_entity_internal_services.v1.get_token import GetEntityAccessToken
+from src.grpc_entity_internal_services.v1.store_token import StoreEntityToken
+from src.grpc_entity_internal_services.v1.update_token import UpdateEntityToken
 from src.long_lived_token import verify_llt
 from src.utils import decrypt_and_deserialize, is_valid_x25519_public_key
 
 logger = get_logger(__name__)
 
 
-class EntityInternalService(vault_pb2_grpc.EntityInternalServicer):
+class EntityInternalServiceV1(vault_pb2_grpc.EntityInternalServicer):
     """Entity Internal Service Descriptor"""
 
     _entity_locks: "weakref.WeakValueDictionary[str, threading.Lock]" = (

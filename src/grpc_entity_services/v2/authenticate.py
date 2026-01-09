@@ -123,7 +123,7 @@ def AuthenticateEntity(self, request, context):
             entity_obj.server_state = None
             entity_obj.client_id_pub_key = request.client_id_pub_key
             entity_obj.client_ratchet_pub_key = request.client_ratchet_pub_key
-            entity_obj.client_nonce = request.client_nonce
+            entity_obj.client_nonce = encrypt_data(request.client_nonce)
             entity_obj.save(
                 only=[
                     "device_id",

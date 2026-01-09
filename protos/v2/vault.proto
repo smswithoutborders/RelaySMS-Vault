@@ -116,6 +116,27 @@ message ResetPasswordResponse {
   bool requires_password_reset = 7;
 }
 
+// Request message for decrypting payload.
+message DecryptPayloadRequest {
+  // Device ID for identifying the requesting device.
+  string device_id = 1;
+  // Encrypted payload that needs to be decrypted.
+  string payload_ciphertext = 2;
+  // The phone number of the entity.
+  string phone_number = 3;
+}
+
+message DecryptPayloadResponse {
+  // Decrypted plaintext payload.
+  string payload_plaintext = 1;
+  // A response message.
+  string message = 2;
+  // Indicates whether the operation was successful.
+  bool success = 3;
+  // The ISO 3166-1 alpha-2 country code of the entity.
+  string country_code = 4;
+}
+
 // Service for managing entities.
 service Entity {
   // Creates an entity.
@@ -124,4 +145,10 @@ service Entity {
   rpc AuthenticateEntity(AuthenticateEntityRequest) returns (AuthenticateEntityResponse);
   // Resets an entity's password
   rpc ResetPassword(ResetPasswordRequest) returns (ResetPasswordResponse);
+}
+
+// Service for managing entities internally.
+service EntityInternal {
+  // Decrypt payload.
+  rpc DecryptPayload(DecryptPayloadRequest) returns (DecryptPayloadResponse);
 }
