@@ -76,7 +76,8 @@ class EntityServiceV2(vault_pb2_grpc.EntityServicer):
         self, context, request, response, required_fields
     ):
         """Validates the fields in the gRPC request."""
-        x25519_fields = {"client_publish_pub_key", "client_device_id_pub_key"}
+        x25519_fields = {"client_id_pub_key", "client_ratchet_pub_key"}
+        nonce_fields = {"client_nonce"}
 
         def field_missing_error(field_names):
             return self.handle_create_grpc_error_response(
@@ -151,6 +152,18 @@ class EntityServiceV2(vault_pb2_grpc.EntityServicer):
                     )
             return None
 
+        def validate_nonces():
+            for field in nonce_fields & set(required_fields):
+                nonce_value = getattr(request, field, None)
+                if nonce_value and len(nonce_value) != 16:
+                    return self.handle_create_grpc_error_response(
+                        context,
+                        response,
+                        f"{field} must be exactly 16 bytes.",
+                        grpc.StatusCode.INVALID_ARGUMENT,
+                    )
+            return None
+
         for field in required_fields:
             validation_error = validate_field(field)
             if validation_error:
@@ -167,6 +180,10 @@ class EntityServiceV2(vault_pb2_grpc.EntityServicer):
         x25519_keys_error = validate_x25519_keys()
         if x25519_keys_error:
             return x25519_keys_error
+
+        nonces_error = validate_nonces()
+        if nonces_error:
+            return nonces_error
 
         return None
 

@@ -510,17 +510,15 @@ def convert_to_fernet_key(secret_key: bytes) -> bytes:
     return base64.urlsafe_b64encode(secret_key)
 
 
-def is_valid_x25519_public_key(encoded_key: bytes) -> Tuple[bool, Optional[str]]:
-    """Validate Base64-encoded X25519 public key.
-
-    Args:
-        encoded_key: Base64-encoded public key.
-
-    Returns:
-        Tuple of (is_valid, error_message).
-    """
+def is_valid_x25519_public_key(key) -> Tuple[bool, Optional[str]]:
+    """Validate X25519 public key."""
     try:
-        decoded_key = base64.b64decode(encoded_key)
+        if isinstance(key, str):
+            decoded_key = base64.b64decode(key)
+        elif isinstance(key, bytes):
+            decoded_key = key
+        else:
+            return False, "Key must be string or bytes"
     except (TypeError, ValueError) as err:
         logger.exception("Base64 decoding error: %s", err)
         return False, "Invalid base64 encoding"

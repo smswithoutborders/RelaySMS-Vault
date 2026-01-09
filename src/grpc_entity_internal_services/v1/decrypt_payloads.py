@@ -54,18 +54,18 @@ def DecryptPayload(self, request, context):
         server_identity_keypair = decrypt_and_deserialize(
             entity_obj.server_ratchet_keypair
         )
-        root_key = server_identity_keypair.agree(entity_obj.client_ratchet_pub_key)
 
         decrypted_state = (
             decrypt_data(entity_obj.server_state) if entity_obj.server_state else None
         )
 
         content_plaintext, state, decrypt_error = decrypt_payload(
-            server_state=decrypted_state,
-            root_key=root_key,
+            encrypted_content=content_ciphertext,
             server_identity_keypair=server_identity_keypair,
             ratchet_header=header,
-            encrypted_content=content_ciphertext,
+            server_state=decrypted_state,
+            server_ratchet_keypair=server_identity_keypair,
+            client_ratchet_pub_key=entity_obj.client_ratchet_pub_key,
         )
 
         if decrypt_error:
@@ -78,8 +78,23 @@ def DecryptPayload(self, request, context):
                 error_type="UNKNOWN",
             )
 
+        was_initialized = decrypted_state is None
         entity_obj.server_state = serialize_state_and_encrypt(state)
-        entity_obj.save(only=["server_state"])
+
+        if was_initialized:
+            entity_obj.client_ratchet_pub_key = None
+            entity_obj.server_ratchet_keypair = None
+            entity_obj.save(
+                only=[
+                    "server_state",
+                    "client_ratchet_pub_key",
+                    "server_ratchet_keypair",
+                ]
+            )
+            logger.debug("Ephemeral ratchet keys deleted after state initialization.")
+        else:
+            entity_obj.save(only=["server_state"])
+
         logger.info("Successfully decrypted payload.")
 
         return response(

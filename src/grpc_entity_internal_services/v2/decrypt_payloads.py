@@ -61,30 +61,31 @@ def DecryptPayload(self, request, context):
         if not identity_key_success:
             return server_identity_keypair
 
-        server_identity_private = server_identity_keypair.load_keystore(
-            server_identity_keypair.pnt_keystore, server_identity_keypair.secret_key
-        )
-
-        client_nonce = decrypt_data(entity_obj.client_nonce)
-        server_nonce = decrypt_data(entity_obj.server_nonce)
-
-        root_key = server_ratchet_keypair.agreeWithAuthAndNonce(
-            server_identity_private,
-            entity_obj.client_ratchet_pub_key,
-            client_nonce,
-            server_nonce,
-        )
-
         decrypted_state = (
             decrypt_data(entity_obj.server_state) if entity_obj.server_state else None
         )
 
+        if not decrypted_state:
+            server_identity_private = server_identity_keypair.load_keystore(
+                server_identity_keypair.pnt_keystore, server_identity_keypair.secret_key
+            )
+            client_nonce = decrypt_data(entity_obj.client_nonce)
+            server_nonce = decrypt_data(entity_obj.server_nonce)
+        else:
+            server_identity_private = None
+            client_nonce = None
+            server_nonce = None
+
         content_plaintext, state, decrypt_error = decrypt_payload(
-            server_state=decrypted_state,
-            root_key=root_key,
+            encrypted_content=content_ciphertext,
             server_identity_keypair=server_identity_keypair,
             ratchet_header=header,
-            encrypted_content=content_ciphertext,
+            server_state=decrypted_state,
+            server_ratchet_keypair=server_ratchet_keypair,
+            client_ratchet_pub_key=entity_obj.client_ratchet_pub_key,
+            server_identity_private=server_identity_private,
+            client_nonce=client_nonce,
+            server_nonce=server_nonce,
         )
 
         if decrypt_error:
@@ -97,8 +98,29 @@ def DecryptPayload(self, request, context):
                 error_type="UNKNOWN",
             )
 
+        was_initialized = decrypted_state is None
         entity_obj.server_state = serialize_state_and_encrypt(state)
-        entity_obj.save(only=["server_state"])
+
+        if was_initialized:
+            entity_obj.client_ratchet_pub_key = None
+            entity_obj.client_nonce = None
+            entity_obj.server_ratchet_keypair = None
+            entity_obj.server_nonce = None
+            entity_obj.save(
+                only=[
+                    "server_state",
+                    "client_ratchet_pub_key",
+                    "client_nonce",
+                    "server_ratchet_keypair",
+                    "server_nonce",
+                ]
+            )
+            logger.debug(
+                "Ephemeral ratchet keys and nonces deleted after state initialization."
+            )
+        else:
+            entity_obj.save(only=["server_state"])
+
         logger.info("Successfully decrypted payload.")
 
         return response(

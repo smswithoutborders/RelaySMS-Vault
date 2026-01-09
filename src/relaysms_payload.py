@@ -14,21 +14,29 @@ logger = get_logger(__name__)
 
 
 def decrypt_payload(
-    root_key: bytes,
     encrypted_content: bytes,
     server_identity_keypair: x25519,
     ratchet_header: bytes,
     server_state: bytes,
+    server_ratchet_keypair=None,
+    client_ratchet_pub_key=None,
+    server_identity_private=None,
+    client_nonce=None,
+    server_nonce=None,
 ):
     """
     Decrypts a RelaySMS payload.
 
     Args:
-        root_key (bytes): Root key for the ratchet.
         encrypted_content (bytes): Encrypted content to decrypt.
         server_identity_keypair (x25519): Server's identity keypair.
         ratchet_header (bytes): Ratchet header.
         server_state (bytes): Current state of the server-side ratchet.
+        server_ratchet_keypair (x25519, optional): Server ratchet keypair for root key generation.
+        client_ratchet_pub_key (bytes, optional): Client's ratchet public key.
+        server_identity_private (bytes, optional): Server's identity private key.
+        client_nonce (bytes, optional): Client nonce.
+        server_nonce (bytes, optional): Server nonce.
 
     Returns:
         tuple:
@@ -42,6 +50,17 @@ def decrypt_payload(
         if not server_state:
             state = States()
             logger.debug("Initializing ratchet...")
+
+            if server_identity_private is not None:
+                root_key = server_ratchet_keypair.agreeWithAuthAndNonce(
+                    server_identity_private,
+                    client_ratchet_pub_key,
+                    client_nonce,
+                    server_nonce,
+                )
+            else:
+                root_key = server_identity_keypair.agree(client_ratchet_pub_key)
+
             Ratchets.bob_init(state, root_key, server_identity_keypair)
         else:
             logger.debug("Deserializing state...")
