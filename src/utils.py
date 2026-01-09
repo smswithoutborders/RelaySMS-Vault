@@ -11,6 +11,8 @@ from functools import wraps
 from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 
 import mysql.connector
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import ed25519
 from cryptography.hazmat.primitives.asymmetric import x25519 as x25519_core
 from peewee import DatabaseError
 from smswithoutborders_libsig.keypairs import x25519
@@ -713,6 +715,47 @@ def parse_date(date_str: str, field_name: str) -> datetime:
         raise ValueError(
             f"Invalid '{field_name}': '{date_str}'. {error_message}"
         ) from e
+
+
+def load_ed25519_private_key() -> ed25519.Ed25519PrivateKey:
+    """Load Ed25519 private key from PEM file.
+
+    Returns:
+        Ed25519 private key object.
+
+    Raises:
+        FileNotFoundError: If signature key file doesn't exist.
+        ValueError: If key file is invalid.
+    """
+    keystore_path = get_configs("KEYSTORE_PATH", strict=True)
+    signature_key_file = get_configs(
+        "SIGNATURE_KEY_FILE", default_value="ed25519_signature.pem"
+    )
+    key_path = os.path.join(keystore_path, signature_key_file)
+
+    try:
+        encryption_key = load_and_decode_key(
+            get_configs("DATA_ENCRYPTION_KEY_PRIMARY_FILE", strict=True), 32
+        )
+
+        with open(key_path, "rb") as f:
+            pem_data = f.read()
+
+        private_key = serialization.load_pem_private_key(
+            pem_data, password=encryption_key
+        )
+
+        if not isinstance(private_key, ed25519.Ed25519PrivateKey):
+            raise ValueError("Loaded key is not an Ed25519 private key")
+
+        return private_key
+
+    except FileNotFoundError:
+        logger.error("Ed25519 signature key file not found at %s", key_path)
+        raise
+    except Exception as e:
+        logger.error("Failed to load Ed25519 private key: %s", e)
+        raise
 
 
 def filter_dict(
