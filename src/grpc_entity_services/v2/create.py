@@ -2,6 +2,7 @@
 """Create Entity gRPC service implementation."""
 
 import secrets
+from datetime import datetime, timedelta, timezone
 
 import grpc
 
@@ -10,6 +11,7 @@ from protos.v2 import vault_pb2
 from src import stats
 from src.device_id import derive_device_id_v1
 from src.entity import create_entity, find_entity
+from src.long_lived_token import derive_llt_v1
 from src.password_validation import validate_password_strength
 from src.recaptcha import is_captcha_enabled
 from src.types import (
@@ -27,6 +29,7 @@ from src.utils import (
     generate_keypair_and_public_key,
     hash_data,
     hash_password,
+    load_ed25519_private_key,
     serialize_and_encrypt,
 )
 
@@ -63,7 +66,16 @@ def CreateEntity(self, request, context):
         )
         server_nonce = secrets.token_bytes(16)
 
-        # long_lived_token = generate_llt(eid, device_id_shared_key)
+        si_private_key = load_ed25519_private_key()
+
+        payload = {
+            "eid": eid,
+            "iss": "https://smswithoutborders.com",
+            "iat": datetime.now(timezone.utc),
+            "exp": datetime.now(timezone.utc) + timedelta(days=3650),
+        }
+
+        long_lived_token = derive_llt_v1(payload, si_private_key)
 
         entity_obj.server_ratchet_keypair = serialize_and_encrypt(
             server_ratchet_keypair
@@ -88,7 +100,7 @@ def CreateEntity(self, request, context):
         logger.info("Entity created successfully")
 
         return response(
-            long_lived_token="",
+            long_lived_token=long_lived_token,
             message="Entity created successfully",
             server_ratchet_pub_key=server_ratchet_pub_key,
             server_nonce=server_nonce,

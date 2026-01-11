@@ -33,6 +33,7 @@ class LoggingInterceptor(ServerInterceptor):
         """
         Intercept method calls for each incoming RPC.
         """
+        context.method_name = method_name
         response = method(request_or_iterator, context)
         if context.details():
             self.logger.error(

@@ -78,6 +78,32 @@ message AuthenticateEntityResponse {
   bool requires_password_reset = 7;
 }
 
+// Request message for listing entity's stored tokens.
+message ListEntityStoredTokensRequest {
+  // Indicates if the token should be removed from the cloud and sent to the device.
+  bool migrate_to_device = 1;
+}
+
+// Response message for listing entity's stored tokens.
+message ListEntityStoredTokensResponse {
+  // The list of stored tokens.
+  repeated Token stored_tokens = 1;
+  // A response message.
+  string message = 2;
+}
+
+// Represents a token.
+message Token {
+  // The platform associated with the token.
+  string platform = 1;
+  // The unique identifier of the account associated with the token.
+  string account_identifier = 2;
+  // Access and refresh tokens
+  map<string, string> account_tokens = 3;
+  // Indicates if the token is already stored on the device.
+  bool is_stored_on_device = 4;
+}
+
 // Request message for resetting an entity's password.
 message ResetPasswordRequest {
   // The phone number of the entity (optional).
@@ -143,6 +169,8 @@ service Entity {
   rpc CreateEntity(CreateEntityRequest) returns (CreateEntityResponse);
   // Authenticates an entity.
   rpc AuthenticateEntity(AuthenticateEntityRequest) returns (AuthenticateEntityResponse);
+  // Lists all stored access tokens for an entity.
+  rpc ListEntityStoredTokens(ListEntityStoredTokensRequest) returns (ListEntityStoredTokensResponse);
   // Resets an entity's password
   rpc ResetPassword(ResetPasswordRequest) returns (ResetPasswordResponse);
 }

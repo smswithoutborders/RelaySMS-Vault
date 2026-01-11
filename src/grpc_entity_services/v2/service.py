@@ -9,6 +9,8 @@ import weakref
 
 import grpc
 import phonenumbers
+from cachetools import TTLCache
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
 from base_logger import get_logger
 from protos.v2 import vault_pb2_grpc
@@ -16,12 +18,18 @@ from src.db_models import StaticKeypairs
 from src.entity import find_entity
 from src.grpc_entity_services.v2.authenticate import AuthenticateEntity
 from src.grpc_entity_services.v2.create import CreateEntity
+from src.grpc_entity_services.v2.list_tokens import ListEntityStoredTokens
 from src.grpc_entity_services.v2.reset_password import ResetPassword
-from src.long_lived_token import verify_llt
+from src.long_lived_token import derive_llt_shared_secret, verify_llt, verify_llt_v1
 from src.otp_service import send_otp, verify_otp
 from src.recaptcha import verify_captcha
 from src.types import ContactType
-from src.utils import decrypt_and_deserialize, hash_data, is_valid_x25519_public_key
+from src.utils import (
+    decrypt_and_deserialize,
+    hash_data,
+    is_valid_x25519_public_key,
+    load_ed25519_private_key,
+)
 
 logger = get_logger(__name__)
 
@@ -36,6 +44,7 @@ class EntityServiceV2(vault_pb2_grpc.EntityServicer):
         weakref.WeakValueDictionary()
     )
     _locks_lock: threading.Lock = threading.Lock()
+    _nonce_cache: TTLCache = TTLCache(maxsize=10000, ttl=600)
 
     @classmethod
     def _get_entity_lock(cls, identifier: str) -> threading.Lock:
@@ -62,10 +71,10 @@ class EntityServiceV2(vault_pb2_grpc.EntityServicer):
 
         if error_type == "UNKNOWN":
             traceback.print_exception(type(error), error, error.__traceback__)
+        else:
+            logger.error(str(error))
 
         error_message = f"{error_prefix}: {user_msg}" if error_prefix else user_msg
-
-        logger.error(error_message)
 
         context.set_details(error_message)
         context.set_code(status_code)
@@ -236,8 +245,8 @@ class EntityServiceV2(vault_pb2_grpc.EntityServicer):
 
         return True, None
 
-    def handle_long_lived_token_validation(self, request, context, response):
-        """Handles the validation of a long-lived token from the request."""
+    def handle_long_lived_token_v1_validation(self, context, response):
+        """Handles the validation of a long-lived token v1."""
 
         def create_error_response(error_msg):
             return self.handle_create_grpc_error_response(
@@ -250,79 +259,109 @@ class EntityServiceV2(vault_pb2_grpc.EntityServicer):
                 ),
             )
 
-        def extract_token(long_lived_token):
-            try:
-                eid, llt = long_lived_token.split(":", 1)
-                return eid, llt
-            except ValueError as err:
-                return None, create_error_response(f"Token extraction error: {err}")
+        def extract_metadata(context):
+            metadata = dict(context.invocation_metadata())
+            authorization = metadata.get("authorization")
+            signature = metadata.get("x-sig")
+            nonce = metadata.get("x-nonce")
+            timestamp = metadata.get("x-timestamp")
 
-        def validate_entity(eid):
+            if not authorization:
+                return (
+                    None,
+                    None,
+                    None,
+                    None,
+                    create_error_response("Missing Authorization header"),
+                )
+
+            if not authorization.startswith("Bearer "):
+                return (
+                    None,
+                    None,
+                    None,
+                    None,
+                    create_error_response(
+                        "Invalid Authorization header format. Expected 'Bearer <token>'"
+                    ),
+                )
+
+            llt = authorization[7:]
+
+            if not signature or not nonce or not timestamp:
+                missing = []
+                if not signature:
+                    missing.append("X-Sig")
+                if not nonce:
+                    missing.append("X-Nonce")
+                if not timestamp:
+                    missing.append("X-Timestamp")
+                return (
+                    None,
+                    None,
+                    None,
+                    None,
+                    create_error_response(
+                        f"Missing required metadata: {', '.join(missing)}"
+                    ),
+                )
+
+            return llt, signature, nonce, timestamp, None
+
+        try:
+            llt, signature, nonce, timestamp, metadata_error = extract_metadata(context)
+            if metadata_error:
+                return None, metadata_error
+
+            method_name = getattr(context, "method_name", "")
+
+            si_private_key = load_ed25519_private_key()
+            si_public_key = si_private_key.public_key()
+
+            payload, llt_error = verify_llt_v1(llt=llt, si_public_key=si_public_key)
+
+            if llt_error:
+                return None, create_error_response(llt_error)
+
+            eid = payload.get("eid")
+            if not eid:
+                return None, create_error_response("EID not found in token payload")
+
             entity_obj = find_entity(eid=eid)
             if not entity_obj:
                 return None, create_error_response(
                     f"Possible token tampering detected. Entity not found with eid: {eid}"
                 )
+
             if not entity_obj.device_id:
                 return None, create_error_response(
                     f"No device ID found for entity with EID: {eid}"
                 )
+
+            if not entity_obj.client_id_pub_key:
+                return None, create_error_response(
+                    "Client identity public key not found. Should re-authenticate."
+                )
+
+            if nonce in self._nonce_cache:
+                return None, create_error_response("Nonce has already been used.")
+
+            self._nonce_cache[nonce] = True
+
+            request_string_bytes = (
+                method_name.encode() + timestamp.encode() + bytes.fromhex(nonce)
+            )
+            signature_bytes = bytes.fromhex(signature)
+            client_id_pub_key = Ed25519PublicKey.from_public_bytes(
+                entity_obj.client_id_pub_key
+            )
+            client_id_pub_key.verify(signature_bytes, request_string_bytes)
+
             return entity_obj, None
 
-        def validate_long_lived_token(llt, entity_obj):
-            if not entity_obj.client_device_id_pub_key:
-                return None, create_error_response(
-                    "Entity's client device ID public key is missing. Should re-authenticate."
-                )
-
-            if not entity_obj.device_id_keypair:
-                return None, create_error_response(
-                    "Entity's device ID keypair is missing. Should re-authenticate."
-                )
-
-            entity_device_id_keypair = decrypt_and_deserialize(
-                entity_obj.device_id_keypair
-            )
-
-            if not entity_device_id_keypair:
-                return None, create_error_response(
-                    "Failed to load entity's device ID keypair. Should re-authenticate."
-                )
-
-            try:
-                entity_device_id_shared_key = entity_device_id_keypair.agree(
-                    base64.b64decode(entity_obj.client_device_id_pub_key),
-                )
-            except Exception as e:
-                return None, create_error_response(
-                    f"Failed to compute shared key: {str(e)}. Should re-authenticate."
-                )
-
-            llt_payload, llt_error = verify_llt(llt, entity_device_id_shared_key)
-
-            if not llt_payload:
-                return None, create_error_response(llt_error)
-
-            if llt_payload.get("eid") != entity_obj.eid.hex:
-                return None, create_error_response(
-                    f"Possible token tampering detected. EID mismatch: {entity_obj.eid}"
-                )
-
-            return llt_payload, None
-
-        eid, llt = extract_token(request.long_lived_token)
-        if llt is None:
-            return None, llt
-
-        entity_obj, entity_error = validate_entity(eid)
-        if entity_error:
-            return None, entity_error
-
-        _, token_error = validate_long_lived_token(llt, entity_obj)
-        if token_error:
-            return None, token_error
-
-        return entity_obj, None
+        except Exception as e:
+            logger.error("Error validating LLT v1: %s", e)
+            return None, create_error_response(str(e))
 
     def clean_phone_number(self, phone_number):
         """Cleans up the phone number by removing spaces."""
@@ -369,4 +408,5 @@ class EntityServiceV2(vault_pb2_grpc.EntityServicer):
 
     AuthenticateEntity = AuthenticateEntity
     CreateEntity = CreateEntity
+    ListEntityStoredTokens = ListEntityStoredTokens
     ResetPassword = ResetPassword
