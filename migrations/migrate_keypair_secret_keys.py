@@ -7,6 +7,7 @@ This migration handles the change in lib_signal_double_ratchet_python where:
 
 Migrates keypairs in:
 - StaticKeypairs.keypair_bytes
+- Entity.publish_keypair
 
 For each keypair:
 1. Deserialize to extract keystore_path, old secret_key
@@ -24,7 +25,7 @@ from sqlcipher3 import dbapi2 as sqlite
 from tqdm import tqdm
 
 from base_logger import get_logger
-from src.db_models import StaticKeypairs
+from src.db_models import Entity, StaticKeypairs
 from src.utils import (
     decrypt_and_deserialize,
     serialize_and_encrypt,
@@ -194,6 +195,119 @@ def migrate_static_keypairs(dry_run: bool = False):
     return (total, migrated, skipped, failed)
 
 
+def is_static_keypair_reference(
+    keystore_path: str, static_keypairs_cache: dict
+) -> bool:
+    """Check if keystore_path belongs to a StaticKeypair.
+
+    Args:
+        keystore_path: Path to check.
+        static_keypairs_cache: Cache of static keypair keystore paths.
+
+    Returns:
+        True if keystore_path matches a StaticKeypair, False otherwise.
+    """
+    if keystore_path in static_keypairs_cache:
+        return True
+
+    static_keypairs = StaticKeypairs.select().where(
+        StaticKeypairs.keypair_bytes.is_null(False)
+    )
+    for sk in static_keypairs:
+        try:
+            sk_obj = decrypt_and_deserialize(sk.keypair_bytes)
+            static_keypairs_cache[sk_obj.keystore_path] = sk.keypair_bytes
+            if sk_obj.keystore_path == keystore_path:
+                return True
+        except Exception:
+            continue
+    return False
+
+
+def migrate_entity_publish_keypairs(dry_run: bool = False):
+    """Migrate Entity.publish_keypair table.
+
+    Handles two cases:
+    1. V1 create/auth: Separate keypair per entity (migrate normally)
+    2. V1 bridge: Reference to StaticKeypair (copy from already-migrated static)
+
+    Args:
+        dry_run: If True, only check keypairs without modifying.
+
+    Returns:
+        Tuple of (total, migrated, skipped, failed) counts.
+    """
+    logger.info("=" * 60)
+    logger.info("Migrating Entity.publish_keypair table")
+    logger.info("=" * 60)
+
+    entities_query = Entity.select().where(Entity.publish_keypair.is_null(False))
+    total = entities_query.count()
+
+    if total == 0:
+        logger.info("No entity publish keypairs found.")
+        return (0, 0, 0, 0)
+
+    logger.info(
+        f"Found {total} entity publish keypairs to {'check' if dry_run else 'migrate'}."
+    )
+
+    progress_bar = tqdm(total=total, desc="Entity publish keypairs", unit="keypair")
+    migrated = 0
+    skipped = 0
+    failed = 0
+    static_keypairs_cache = {}
+
+    for batch in chunked(entities_query, BATCH_SIZE):
+        for entity in batch:
+            identifier = f"Entity eid={entity.eid}"
+            try:
+                if dry_run:
+                    if entity.publish_keypair:
+                        kp_obj = decrypt_and_deserialize(entity.publish_keypair)
+
+                        if is_already_migrated(kp_obj.secret_key):
+                            logger.debug(f"{identifier} already in new format")
+                            skipped += 1
+                        else:
+                            logger.info(f"{identifier} needs migration")
+                else:
+                    kp_obj = decrypt_and_deserialize(entity.publish_keypair)
+
+                    if is_already_migrated(kp_obj.secret_key):
+                        logger.debug(f"{identifier} already migrated")
+                        skipped += 1
+                    elif is_static_keypair_reference(
+                        kp_obj.keystore_path, static_keypairs_cache
+                    ):
+                        logger.info(
+                            f"{identifier} is bridge entity, copying from StaticKeypair"
+                        )
+                        new_blob = static_keypairs_cache[kp_obj.keystore_path]
+                        entity.publish_keypair = new_blob
+                        entity.save(only=["publish_keypair"])
+                        migrated += 1
+                    else:
+                        logger.info(
+                            f"{identifier} is v1 entity, migrating independently"
+                        )
+                        new_blob = migrate_keypair_blob(
+                            entity.publish_keypair, identifier
+                        )
+                        entity.publish_keypair = new_blob
+                        entity.save(only=["publish_keypair"])
+                        migrated += 1
+
+            except Exception as e:
+                logger.error(f"Error processing {identifier}: {e}")
+                failed += 1
+
+            progress_bar.update(1)
+
+    progress_bar.close()
+    return (total, migrated, skipped, failed)
+
+
 def run_migration(dry_run: bool = False):
     """Migrate all keypair secret_keys.
 
@@ -209,6 +323,11 @@ def run_migration(dry_run: bool = False):
             migrate_static_keypairs(dry_run)
         )
 
+    with Entity._meta.database.connection_context():
+        entity_total, entity_migrated, entity_skipped, entity_failed = (
+            migrate_entity_publish_keypairs(dry_run)
+        )
+
     # Summary
     logger.info("\n" + "=" * 60)
     logger.info(f"Migration {'check' if dry_run else 'complete'} summary")
@@ -218,6 +337,11 @@ def run_migration(dry_run: bool = False):
     logger.info(f"  Migrated: {static_migrated}")
     logger.info(f"  Skipped (already migrated): {static_skipped}")
     logger.info(f"  Failed: {static_failed}")
+    logger.info("\nEntity.publish_keypair:")
+    logger.info(f"  Total: {entity_total}")
+    logger.info(f"  Migrated: {entity_migrated}")
+    logger.info(f"  Skipped (already migrated): {entity_skipped}")
+    logger.info(f"  Failed: {entity_failed}")
 
     if migration_errors:
         logger.error(f"\n{len(migration_errors)} errors occurred:")

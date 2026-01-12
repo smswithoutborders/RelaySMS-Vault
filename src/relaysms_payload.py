@@ -131,6 +131,7 @@ def decrypt_payload(
     client_header_pub_key=None,
     client_next_header_pub_key=None,
     client_nonce=None,
+    use_header_encryption: bool = False,
 ):
     """
     Decrypts a RelaySMS payload.
@@ -140,13 +141,13 @@ def decrypt_payload(
         ratchet_header (bytes): Ratchet header (encrypted or plaintext).
         server_state (bytes): Current state of the server-side ratchet.
         server_identity_keypair (x25519): Server's identity keypair.
-        server_identity_private (bytes, optional): Server's identity private key.
         server_ratchet_keypair (x25519, optional): Server ratchet keypair.
         server_nonce (bytes, optional): Server nonce.
         client_ratchet_pub_key (bytes, optional): Client's ratchet public key.
         client_header_pub_key (bytes, optional): Client's header public key.
         client_next_header_pub_key (bytes, optional): Client's next header public key.
         client_nonce (bytes, optional): Client nonce.
+        use_header_encryption (bool, optional): Explicitly set whether to use header encryption.
 
     Returns:
         tuple:
@@ -160,9 +161,6 @@ def decrypt_payload(
         associated_data = server_identity_keypair.get_public_key()
 
         if not server_state:
-            use_header_encryption = all(
-                [client_header_pub_key, client_next_header_pub_key]
-            )
             logger.debug("Initializing ratchet...")
             state, root_key, header_key, next_header_key = _initialize_ratchet_state(
                 server_identity_keypair=server_identity_keypair,
@@ -190,7 +188,6 @@ def decrypt_payload(
             logger.debug("Deserializing state...")
             logger.debug("Current state: %s", server_state)
             state = States.deserialize_json(server_state)
-            use_header_encryption = hasattr(state, "HKr")
 
         if use_header_encryption:
             plaintext = _decrypt_with_header_encrypted_ratchet(
@@ -265,6 +262,7 @@ def decode_relay_sms_payload(content):
         logger.debug("Unpacking payload....")
         payload = base64.b64decode(content)
         len_header = struct.unpack("<i", payload[:4])[0]
+        logger.debug("Header length: %d", len_header)
         header = payload[4 : 4 + len_header]
         encrypted_content = payload[4 + len_header :]
         return header, encrypted_content, None

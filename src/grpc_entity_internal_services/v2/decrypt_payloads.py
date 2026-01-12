@@ -83,6 +83,7 @@ def DecryptPayload(self, request, context):
             client_header_pub_key=entity_obj.client_header_pub_key,
             client_next_header_pub_key=entity_obj.client_next_header_pub_key,
             client_nonce=client_nonce,
+            use_header_encryption=True,
         )
 
         if decrypt_error:
