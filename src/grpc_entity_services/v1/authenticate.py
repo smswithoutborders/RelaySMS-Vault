@@ -26,8 +26,8 @@ from src.types import (
 )
 from src.utils import (
     clear_keystore,
+    create_x25519_keypair,
     decode_and_decrypt,
-    generate_keypair_and_public_key,
     hash_data,
     hash_password,
     serialize_and_encrypt,
@@ -41,9 +41,7 @@ def AuthenticateEntity(self, request, context):
     """Handles the authentication of an entity."""
 
     response = vault_pb2.AuthenticateEntityResponse
-
-    if hasattr(request, "phone_number"):
-        request.phone_number = self.clean_phone_number(request.phone_number)
+    return self.handle_deprecated_v1_method(context, response)
 
     def initiate_authentication(entity_obj):
         if is_rate_limited(entity_obj.eid):
@@ -136,11 +134,11 @@ def AuthenticateEntity(self, request, context):
         eid = entity_obj.eid.hex
 
         clear_keystore(eid)
-        entity_publish_keypair, entity_publish_pub_key = (
-            generate_keypair_and_public_key(eid, "publish")
+        entity_publish_keypair, entity_publish_pub_key = create_x25519_keypair(
+            eid, "publish"
         )
-        entity_device_id_keypair, entity_device_id_pub_key = (
-            generate_keypair_and_public_key(eid, "device_id")
+        entity_device_id_keypair, entity_device_id_pub_key = create_x25519_keypair(
+            eid, "device_id"
         )
 
         device_id_shared_key = entity_device_id_keypair.agree(
@@ -183,12 +181,12 @@ def AuthenticateEntity(self, request, context):
         return response(
             long_lived_token=long_lived_token,
             message="Entity authenticated successfully!",
-            server_publish_pub_key=base64.b64encode(entity_publish_pub_key).decode(
-                "utf-8"
-            ),
-            server_device_id_pub_key=base64.b64encode(entity_device_id_pub_key).decode(
-                "utf-8"
-            ),
+            server_publish_pub_key=base64.b64encode(
+                entity_publish_pub_key["public_key"]
+            ).decode("utf-8"),
+            server_device_id_pub_key=base64.b64encode(
+                entity_device_id_pub_key["public_key"]
+            ).decode("utf-8"),
         )
 
     def validate_fields():

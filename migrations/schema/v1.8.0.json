@@ -14,6 +14,18 @@
   {
     "action": "add_column",
     "table": "entities",
+    "column_name": "client_header_pub_key",
+    "field": "BlobField(null=True)"
+  },
+  {
+    "action": "add_column",
+    "table": "entities",
+    "column_name": "client_next_header_pub_key",
+    "field": "BlobField(null=True)"
+  },
+  {
+    "action": "add_column",
+    "table": "entities",
     "column_name": "client_nonce",
     "field": "BlobField(null=True)"
   },

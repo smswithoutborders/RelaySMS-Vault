@@ -66,26 +66,23 @@ def DecryptPayload(self, request, context):
         )
 
         if not decrypted_state:
-            server_identity_private = server_identity_keypair.load_keystore(
-                server_identity_keypair.pnt_keystore, server_identity_keypair.secret_key
-            )
             client_nonce = decrypt_data(entity_obj.client_nonce)
             server_nonce = decrypt_data(entity_obj.server_nonce)
         else:
-            server_identity_private = None
             client_nonce = None
             server_nonce = None
 
         content_plaintext, state, decrypt_error = decrypt_payload(
             encrypted_content=content_ciphertext,
-            server_identity_keypair=server_identity_keypair,
             ratchet_header=header,
             server_state=decrypted_state,
+            server_identity_keypair=server_identity_keypair,
             server_ratchet_keypair=server_ratchet_keypair,
-            client_ratchet_pub_key=entity_obj.client_ratchet_pub_key,
-            server_identity_private=server_identity_private,
-            client_nonce=client_nonce,
             server_nonce=server_nonce,
+            client_ratchet_pub_key=entity_obj.client_ratchet_pub_key,
+            client_header_pub_key=entity_obj.client_header_pub_key,
+            client_next_header_pub_key=entity_obj.client_next_header_pub_key,
+            client_nonce=client_nonce,
         )
 
         if decrypt_error:
@@ -103,16 +100,20 @@ def DecryptPayload(self, request, context):
 
         if was_initialized:
             entity_obj.client_ratchet_pub_key = None
+            entity_obj.client_header_pub_key = None
+            entity_obj.client_next_header_pub_key = None
             entity_obj.client_nonce = None
             entity_obj.server_ratchet_keypair = None
             entity_obj.server_nonce = None
             entity_obj.save(
                 only=[
                     "server_state",
-                    "client_ratchet_pub_key",
-                    "client_nonce",
                     "server_ratchet_keypair",
                     "server_nonce",
+                    "client_ratchet_pub_key",
+                    "client_header_pub_key",
+                    "client_next_header_pub_key",
+                    "client_nonce",
                 ]
             )
             logger.debug(

@@ -290,21 +290,47 @@ def generate_eid(
     return uuid.uuid5(namespace, identifier_hash).hex
 
 
-def generate_keypair_and_public_key(eid: str, keystore_name: str) -> Tuple[Any, bytes]:
-    """Generate X25519 keypair and public key.
+def create_x25519_keypair(
+    eid: str, keystore_name: str, encrypt_headers: bool = False
+) -> Tuple[x25519, Dict[str, Optional[bytes]]]:
+    """Create and initialize an X25519 keypair.
 
     Args:
-        eid: Unique entity identifier.
-        keystore_name: Keystore file name.
+        eid (str): Unique entity identifier.
+        keystore_name (str): Keystore file name.
+        encrypt_headers (bool): Whether to generate header-related keypairs.
 
     Returns:
-        Tuple of (keypair_object, public_key).
+        Tuple[x25519, Dict[str, Optional[bytes]]]: A tuple containing:
+            - The X25519 keypair object.
+            - A dictionary of public keys with the following keys:
+                - public_key: The X25519 public key bytes.
+                - header_public_key: The X25519 header public key bytes, or ``None``
+                  if headers are not encrypted.
+                - next_header_public_key: The X25519 next header public key bytes,
+                  or ``None`` if headers are not encrypted.
     """
     keystore_path = get_configs("KEYSTORE_PATH")
     file_path = os.path.join(keystore_path, f"{eid}_{keystore_name}.db")
-    keypair_obj = x25519(file_path)
-    peer_pub_key = keypair_obj.init()
-    return keypair_obj, peer_pub_key
+
+    x25519_keypair = x25519(file_path)
+
+    public_keys: Dict[str, Optional[bytes]] = {
+        "public_key": None,
+        "header_public_key": None,
+        "next_header_public_key": None,
+    }
+
+    if encrypt_headers:
+        (
+            public_keys["public_key"],
+            public_keys["header_public_key"],
+            public_keys["next_header_public_key"],
+        ) = x25519_keypair.initHE()
+    else:
+        public_keys["public_key"] = x25519_keypair.init()
+
+    return x25519_keypair, public_keys
 
 
 def deserialize_keypair(keypair: bytes) -> Any:
@@ -552,7 +578,9 @@ def clear_keystore(eid: str, keystore_name: Optional[str] = None) -> None:
         eid: Unique identifier for keystore files.
         keystore_name: Specific keystore name to delete, or None for all.
     """
-    file_suffixes = [keystore_name] if keystore_name else ["publish", "device_id"]
+    file_suffixes = (
+        [keystore_name] if keystore_name else ["publish", "device_id", "ratchet"]
+    )
     keystore_path = get_configs("KEYSTORE_PATH")
 
     for suffix in file_suffixes:

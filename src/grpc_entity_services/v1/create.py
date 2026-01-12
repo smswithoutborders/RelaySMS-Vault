@@ -22,9 +22,9 @@ from src.types import (
 )
 from src.utils import (
     clear_keystore,
+    create_x25519_keypair,
     encrypt_and_encode,
     generate_eid,
-    generate_keypair_and_public_key,
     hash_data,
     hash_password,
     serialize_and_encrypt,
@@ -37,6 +37,7 @@ def CreateEntity(self, request, context):
     """Handles the creation of an entity."""
 
     response = vault_pb2.CreateEntityResponse
+    return self.handle_deprecated_v1_method(context, response)
 
     if hasattr(request, "phone_number"):
         request.phone_number = self.clean_phone_number(request.phone_number)
@@ -55,11 +56,11 @@ def CreateEntity(self, request, context):
         country_code_ciphertext_b64 = encrypt_and_encode(request.country_code)
 
         clear_keystore(eid)
-        entity_publish_keypair, entity_publish_pub_key = (
-            generate_keypair_and_public_key(eid, "publish")
+        entity_publish_keypair, entity_publish_pub_key = create_x25519_keypair(
+            eid, "publish"
         )
-        entity_device_id_keypair, entity_device_id_pub_key = (
-            generate_keypair_and_public_key(eid, "device_id")
+        entity_device_id_keypair, entity_device_id_pub_key = create_x25519_keypair(
+            eid, "device_id"
         )
 
         device_id_shared_key = entity_device_id_keypair.agree(
@@ -103,12 +104,12 @@ def CreateEntity(self, request, context):
         return response(
             long_lived_token=long_lived_token,
             message="Entity created successfully",
-            server_publish_pub_key=base64.b64encode(entity_publish_pub_key).decode(
-                "utf-8"
-            ),
-            server_device_id_pub_key=base64.b64encode(entity_device_id_pub_key).decode(
-                "utf-8"
-            ),
+            server_publish_pub_key=base64.b64encode(
+                entity_publish_pub_key["public_key"]
+            ).decode("utf-8"),
+            server_device_id_pub_key=base64.b64encode(
+                entity_device_id_pub_key["public_key"]
+            ).decode("utf-8"),
         )
 
     def initiate_creation():

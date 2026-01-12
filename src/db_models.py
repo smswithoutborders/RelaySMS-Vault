@@ -34,6 +34,8 @@ class Entity(Model):
     device_id = CharField(null=True)
     client_id_pub_key = BlobField(null=True)
     client_ratchet_pub_key = BlobField(null=True)
+    client_header_pub_key = BlobField(null=True)
+    client_next_header_pub_key = BlobField(null=True)
     client_nonce = BlobField(null=True)
     server_ratchet_keypair = BlobField(null=True)
     server_nonce = BlobField(null=True)

@@ -318,6 +318,15 @@ class EntityServiceV1(vault_pb2_grpc.EntityServicer):
             return ContactType.EMAIL, email_address
         return ContactType.PHONE, phone_number
 
+    def handle_deprecated_v1_method(self, context, response):
+        """Returns an error response for deprecated v1 methods."""
+        return self.handle_create_grpc_error_response(
+            context,
+            response,
+            "Please update your app to use the latest version.",
+            grpc.StatusCode.INVALID_ARGUMENT,
+        )
+
     AuthenticateEntity = AuthenticateEntity
     CreateEntity = CreateEntity
     DeleteEntity = DeleteEntity

@@ -22,8 +22,8 @@ from src.types import (
 )
 from src.utils import (
     clear_keystore,
+    create_x25519_keypair,
     decode_and_decrypt,
-    generate_keypair_and_public_key,
     hash_data,
     hash_password,
     serialize_and_encrypt,
@@ -36,6 +36,7 @@ def ResetPassword(self, request, context):
     """Handles resetting an entity's password."""
 
     response = vault_pb2.ResetPasswordResponse
+    return self.handle_deprecated_v1_method(context, response)
 
     def initiate_reset(entity_obj):
         if is_captcha_enabled():
