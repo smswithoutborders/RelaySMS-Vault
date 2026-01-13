@@ -3,6 +3,7 @@ Module for handling encryption, decryption, encoding, and decoding of RelaySMS p
 """
 
 import base64
+import hashlib
 import struct
 
 from smswithoutborders_libsig.keypairs import x25519
@@ -120,6 +121,19 @@ def _decrypt_with_header_encrypted_ratchet(
     return plaintext
 
 
+def _generate_associated_data(
+    client_id_pub_key: bytes,
+    server_identity_pub_key: bytes,
+    message: str = "RelaySMS AD v1",
+) -> bytes:
+    """Generate associated data."""
+    h = hashlib.sha256()
+    h.update(message.encode("utf-8"))
+    h.update(client_id_pub_key)
+    h.update(server_identity_pub_key)
+    return h.digest()
+
+
 def decrypt_payload(
     encrypted_content: bytes,
     ratchet_header: bytes,
@@ -131,6 +145,8 @@ def decrypt_payload(
     client_header_pub_key=None,
     client_next_header_pub_key=None,
     client_nonce=None,
+    client_id_pub_key=None,
+    associated_data=None,
     use_header_encryption: bool = False,
 ):
     """
@@ -147,6 +163,8 @@ def decrypt_payload(
         client_header_pub_key (bytes, optional): Client's header public key.
         client_next_header_pub_key (bytes, optional): Client's next header public key.
         client_nonce (bytes, optional): Client nonce.
+        cleint_id_pub_key (bytes, optional): Client's identity public key.
+        associated_data (bytes, optional): Associated data for decryption.
         use_header_encryption (bool, optional): Explicitly set whether to use header encryption.
 
     Returns:
@@ -158,8 +176,6 @@ def decrypt_payload(
     logger.debug("Ciphertext: %s", encrypted_content)
 
     try:
-        associated_data = server_identity_keypair.get_public_key()
-
         if not server_state:
             logger.debug("Initializing ratchet...")
             state, root_key, header_key, next_header_key = _initialize_ratchet_state(
@@ -189,19 +205,23 @@ def decrypt_payload(
             logger.debug("Current state: %s", server_state)
             state = States.deserialize_json(server_state)
 
+        AD = associated_data or _generate_associated_data(
+            client_id_pub_key=client_id_pub_key,
+            server_identity_pub_key=server_identity_keypair.get_public_key(),
+        )
         if use_header_encryption:
             plaintext = _decrypt_with_header_encrypted_ratchet(
                 state=state,
                 encrypted_header=ratchet_header,
                 encrypted_content=encrypted_content,
-                associated_data=associated_data,
+                associated_data=AD,
             )
         else:
             plaintext = _decrypt_with_standard_ratchet(
                 state=state,
                 ratchet_header=ratchet_header,
                 encrypted_content=encrypted_content,
-                associated_data=associated_data,
+                associated_data=AD,
             )
 
         logger.debug("Plaintext: %s", plaintext)

@@ -51,40 +51,56 @@ def DecryptPayload(self, request, context):
         return (header, content_ciphertext), None
 
     def decrypt_message(entity_obj, header, content_ciphertext):
-        server_ratchet_keypair = decrypt_and_deserialize(
-            entity_obj.server_ratchet_keypair
-        )
-
-        identity_key_success, server_identity_keypair = self.get_server_identity_key(
-            context, response
-        )
-        if not identity_key_success:
-            return server_identity_keypair
+        is_v2_entity = bool(entity_obj.client_id_pub_key)
 
         decrypted_state = (
             decrypt_data(entity_obj.server_state) if entity_obj.server_state else None
         )
 
-        if not decrypted_state:
-            client_nonce = decrypt_data(entity_obj.client_nonce)
-            server_nonce = decrypt_data(entity_obj.server_nonce)
-        else:
-            client_nonce = None
-            server_nonce = None
+        if is_v2_entity:
+            server_ratchet_keypair = decrypt_and_deserialize(
+                entity_obj.server_ratchet_keypair
+            )
 
-        content_plaintext, state, decrypt_error = decrypt_payload(
-            encrypted_content=content_ciphertext,
-            ratchet_header=header,
-            server_state=decrypted_state,
-            server_identity_keypair=server_identity_keypair,
-            server_ratchet_keypair=server_ratchet_keypair,
-            server_nonce=server_nonce,
-            client_ratchet_pub_key=entity_obj.client_ratchet_pub_key,
-            client_header_pub_key=entity_obj.client_header_pub_key,
-            client_next_header_pub_key=entity_obj.client_next_header_pub_key,
-            client_nonce=client_nonce,
-            use_header_encryption=True,
-        )
+            identity_key_success, server_identity_keypair = (
+                self.get_server_identity_key(context, response)
+            )
+            if not identity_key_success:
+                return server_identity_keypair
+
+            if not decrypted_state:
+                client_nonce = decrypt_data(entity_obj.client_nonce)
+                server_nonce = decrypt_data(entity_obj.server_nonce)
+            else:
+                client_nonce = None
+                server_nonce = None
+
+            use_header_encryption = len(header) >= 60
+            content_plaintext, state, decrypt_error = decrypt_payload(
+                encrypted_content=content_ciphertext,
+                ratchet_header=header,
+                server_state=decrypted_state,
+                server_identity_keypair=server_identity_keypair,
+                server_ratchet_keypair=server_ratchet_keypair,
+                server_nonce=server_nonce,
+                client_ratchet_pub_key=entity_obj.client_ratchet_pub_key,
+                client_header_pub_key=entity_obj.client_header_pub_key,
+                client_next_header_pub_key=entity_obj.client_next_header_pub_key,
+                client_nonce=client_nonce,
+                use_header_encryption=use_header_encryption,
+            )
+        else:
+            server_identity_keypair = decrypt_and_deserialize(
+                entity_obj.publish_keypair
+            )
+
+            content_plaintext, state, decrypt_error = decrypt_payload(
+                encrypted_content=content_ciphertext,
+                ratchet_header=header,
+                server_state=decrypted_state,
+                server_identity_keypair=server_identity_keypair,
+                associated_data=server_identity_keypair.get_public_key(),
+            )
 
         if decrypt_error:
             return self.handle_create_grpc_error_response(
@@ -99,7 +115,7 @@ def DecryptPayload(self, request, context):
         was_initialized = decrypted_state is None
         entity_obj.server_state = serialize_state_and_encrypt(state)
 
-        if was_initialized:
+        if is_v2_entity and was_initialized:
             entity_obj.client_ratchet_pub_key = None
             entity_obj.client_header_pub_key = None
             entity_obj.client_next_header_pub_key = None
