@@ -157,7 +157,6 @@ def CreateEntity(self, request, context):
         if not success:
             return pow_response
 
-        identifier_type, _ = self.get_identifier(request)
         eid = entity_obj.eid.hex
 
         clear_keystore(eid)
@@ -196,6 +195,7 @@ def CreateEntity(self, request, context):
             only=["server_ratchet_keypair", "server_nonce", "device_id", "is_verified"]
         )
 
+        identifier_type, _ = self.get_identifier(request)
         stats.create(
             event_type=StatsEventType.SIGNUP,
             country_code=request.country_code,

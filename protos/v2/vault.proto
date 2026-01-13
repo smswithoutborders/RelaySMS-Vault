@@ -136,8 +136,12 @@ message ResetPasswordRequest {
   bytes client_id_pub_key = 6;
   // The client's ratchet public key.
   bytes client_ratchet_pub_key = 7;
+  // The client's header public key.
+  bytes client_header_pub_key = 8;
+  // The client's next header public key.
+  bytes client_next_header_pub_key = 9;
   // The client's nonce.
-  bytes client_nonce = 8;
+  bytes client_nonce = 10;
 }
 
 // Response message for resetting an entity's password.
@@ -148,14 +152,16 @@ message ResetPasswordResponse {
   string long_lived_token = 2;
   // The server's ratchet public key.
   bytes server_ratchet_pub_key = 3;
+  // The server's header public key.
+  bytes server_header_pub_key = 4;
+  // The server's next header public key.
+  bytes server_next_header_pub_key = 5;
   // The server's nonce.
-  bytes server_nonce = 4;
+  bytes server_nonce = 6;
   // A response message.
-  string message = 5;
+  string message = 7;
   // The next available time to request another proof of ownership.
-  int32 next_attempt_timestamp = 6;
-  // indicates if user must reset their password
-  bool requires_password_reset = 7;
+  int32 next_attempt_timestamp = 8;
 }
 
 // Request message for decrypting payload.

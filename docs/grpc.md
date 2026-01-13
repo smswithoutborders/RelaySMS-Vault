@@ -8,6 +8,8 @@
   - [v2 Public Service](#v2-public-service)
     - [v2: Create an Entity](#v2-create-an-entity)
     - [v2: Authenticate an Entity](#v2-authenticate-an-entity)
+    - [v2: List Entity Stored Tokens](#v2-list-entity-stored-tokens)
+    - [v2: Reset Password](#v2-reset-password)
 - [Version 1 API](#version-1-api)
   - [v1 Public Service](#v1-public-service)
     - [v1: Create an Entity](#v1-create-an-entity)
@@ -119,24 +121,26 @@ Creates a new entity with two-step ownership verification.
 
 **Request:** `CreateEntityRequest`
 
-| Field                  | Type   | Required | Description                                    |
-| ---------------------- | ------ | -------- | ---------------------------------------------- |
-| phone_number           | string | Optional | Phone number in E164 format (e.g., +237123456789) |
-| email_address          | string | Optional | Email address                                  |
-| country_code           | string | Yes      | ISO 3166-1 alpha-2 code (e.g., CM)            |
-| password               | string | Yes      | Secure password                                |
-| captcha_token          | string | Yes*     | Captcha verification token (*if captcha enabled)|
-| client_id_pub_key      | bytes  | Yes      | Client identification public key               |
-| client_ratchet_pub_key | bytes  | Yes      | Client ratchet public key                      |
-| client_nonce           | bytes  | Yes      | Client nonce                                   |
+| Field                      | Type   | Required | Description                                       |
+| -------------------------- | ------ | -------- | ----------------------------------------------    |
+| phone_number               | string | Optional | Phone number in E164 format (e.g., +237123456789) |
+| email_address              | string | Optional | Email address                                     |
+| country_code               | string | Yes      | ISO 3166-1 alpha-2 code (e.g., CM)                |
+| password                   | string | Yes      | Secure password                                   |
+| captcha_token              | string | Yes*     | Captcha verification token (*if captcha enabled)  |
+| client_id_pub_key          | bytes  | Yes      | Client identification public key                  |
+| client_ratchet_pub_key     | bytes  | Yes      | Client ratchet public key                         |
+| client_header_pub_key      | bytes  | Yes      | Client header public key                          |
+| client_next_header_pub_key | bytes  | Yes      | Client next header public key                     |
+| client_nonce               | bytes  | Yes      | Client nonce                                      |
 
 **Response:** `CreateEntityResponse`
 
-| Field                    | Type   | Description                                    |
-| ------------------------ | ------ | ---------------------------------------------- |
-| requires_ownership_proof | bool   | Whether ownership proof is required            |
+| Field                    | Type   | Description                                       |
+| ------------------------ | ------ | ----------------------------------------------    |
+| requires_ownership_proof | bool   | Whether ownership proof is required               |
 | next_attempt_timestamp   | int32  | Next available time to request OTP (Unix seconds) |
-| message                  | string | Response message                               |
+| message                  | string | Response message                                  |
 
 **Example:**
 
@@ -151,6 +155,8 @@ grpcurl -plaintext -d @ -proto protos/v2/vault.proto \
   "captcha_token": "captcha_token_value",
   "client_id_pub_key": "...",
   "client_ratchet_pub_key": "...",
+  "client_header_pub_key": "...",
+  "client_next_header_pub_key": "...",
   "client_nonce": "..."
 }
 EOF
@@ -168,12 +174,14 @@ EOF
 
 **Response:** `CreateEntityResponse`
 
-| Field                  | Type   | Description                    |
-| ---------------------- | ------ | ------------------------------ |
-| long_lived_token       | string | Session token                  |
-| server_ratchet_pub_key | bytes  | Server ratchet public key      |
-| server_nonce           | bytes  | Server nonce                   |
-| message                | string | Response message               |
+| Field                      | Type   | Description                    |
+| -------------------------- | ------ | ------------------------------ |
+| long_lived_token           | string | Session token                  |
+| server_ratchet_pub_key     | bytes  | Server ratchet public key      |
+| server_header_pub_key      | bytes  | Server header public key       |
+| server_next_header_pub_key | bytes  | Server next header public key  |
+| server_nonce               | bytes  | Server nonce                   |
+| message                    | string | Response message               |
 
 **Example:**
 
@@ -198,15 +206,17 @@ Authenticates an existing entity with two-step verification.
 
 **Request:** `AuthenticateEntityRequest`
 
-| Field                  | Type   | Required | Description                        |
-| ---------------------- | ------ | -------- | ---------------------------------- |
-| phone_number           | string | Optional | Phone number in E164 format        |
-| email_address          | string | Optional | Email address                      |
-| password               | string | Yes      | Entity password                    |
-| captcha_token          | string | Yes*     | Captcha verification token (*if captcha enabled)|
-| client_id_pub_key      | bytes  | Yes      | Client identification public key   |
-| client_ratchet_pub_key | bytes  | Yes      | Client ratchet public key          |
-| client_nonce           | bytes  | Yes      | Client nonce                       |
+| Field                      | Type   | Required | Description                                     |
+| -------------------------- | ------ | -------- | ----------------------------------              |
+| phone_number               | string | Optional | Phone number in E164 format                     |
+| email_address              | string | Optional | Email address                                   |
+| password                   | string | Yes      | Entity password                                 |
+| captcha_token              | string | Yes*     | Captcha verification token (*if captcha enabled)|
+| client_id_pub_key          | bytes  | Yes      | Client identification public key                |
+| client_ratchet_pub_key     | bytes  | Yes      | Client ratchet public key                       |
+| client_header_pub_key      | bytes  | Yes      | Client header public key                        |
+| client_next_header_pub_key | bytes  | Yes      | Client next header public key                   |
+| client_nonce               | bytes  | Yes      | Client nonce                                    |
 
 **Response:** `AuthenticateEntityResponse`
 
@@ -229,6 +239,8 @@ grpcurl -plaintext -d @ -proto protos/v2/vault.proto \
   "captcha_token": "captcha_token_value",
   "client_id_pub_key": "...",
   "client_ratchet_pub_key": "...",
+  "client_header_pub_key": "...",
+  "client_next_header_pub_key": "...",
   "client_nonce": "..."
 }
 EOF
@@ -246,12 +258,14 @@ EOF
 
 **Response:** `AuthenticateEntityResponse`
 
-| Field                  | Type   | Description               |
-| ---------------------- | ------ | ------------------------- |
-| long_lived_token       | string | Session token             |
-| server_ratchet_pub_key | bytes  | Server ratchet public key |
-| server_nonce           | bytes  | Server nonce              |
-| message                | string | Response message          |
+| Field                      | Type   | Description                   |
+| -------------------------- | ------ | ----------------------------- |
+| long_lived_token           | string | Session token                 |
+| server_ratchet_pub_key     | bytes  | Server ratchet public key     |
+| server_header_pub_key      | bytes  | Server header public key      |
+| server_next_header_pub_key | bytes  | Server next header public key |
+| server_nonce               | bytes  | Server nonce                  |
+| message                    | string | Response message              |
 
 **Example:**
 
@@ -262,6 +276,140 @@ grpcurl -plaintext -d @ -proto protos/v2/vault.proto \
   "phone_number": "+237123456789",
   "email_address": "user@example.com",
   "ownership_proof_response": "123456"
+}
+EOF
+```
+
+---
+
+### v2: List Entity Stored Tokens
+
+Retrieves all stored tokens for an authenticated entity.
+
+**Request:** `ListEntityStoredTokensRequest`
+
+| Field             | Type | Required | Description                                  |
+| ----------------- | ---- | -------- | -------------------------------------------- |
+| migrate_to_device | bool | No       | Remove from cloud and send to device         |
+
+**Required Headers:**
+
+| Header        | Type   | Required | Description                                        |
+| ------------- | ------ | -------- | ----------------------------------------------     |
+| authorization | string | Yes      | Bearer token (format: `Bearer <long_lived_token>`) |
+| x-sig         | string | Yes      | Request signature                                  |
+| x-nonce       | string | Yes      | Nonce for request (must be unique)                 |
+| x-timestamp   | string | Yes      | Request timestamp                                  |
+
+**Response:** `ListEntityStoredTokensResponse`
+
+| Field         | Type         | Description                     |
+| ------------- | ------------ | ------------------------------- |
+| stored_tokens | Token[]      | List of stored tokens           |
+| message       | string       | Response message                |
+
+**Token Object:**
+
+| Field              | Type                | Description                         |
+| ------------------ | -----------------   | ----------------------------------- |
+| platform           | string              | Platform name (e.g., "gmail", "x")  |
+| account_identifier | string              | Account identifier                  |
+| account_tokens     | map<string, string> | Access, refresh, and ID tokens      |
+| is_stored_on_device| bool                | Whether token is on device          |
+
+**Example:**
+
+```bash
+grpcurl -plaintext \
+-H 'authorization: Bearer your_long_lived_token' \
+-H 'x-sig: your_signature' \
+-H 'x-nonce: unique_nonce' \
+-H 'x-timestamp: timestamp' \
+-d '{"migrate_to_device": false}' \
+-proto protos/v2/vault.proto \
+<your_host>:<your_port> vault.v2.Entity/ListEntityStoredTokens
+```
+
+---
+
+### v2: Reset Password
+
+Resets an entity's password with two-step verification.
+
+#### Step 1: Initiate Reset
+
+**Request:** `ResetPasswordRequest`
+
+| Field                      | Type   | Required | Description                                     |
+| -------------------------- | ------ | -------- | ----------------------------------------------  |
+| phone_number               | string | Optional | Phone number in E164 format                     |
+| email_address              | string | Optional | Email address                                   |
+| captcha_token              | string | Yes*     | Captcha verification token (*if captcha enabled)|
+
+**Response:** `ResetPasswordResponse`
+
+| Field                    | Type   | Description                        |
+| ------------------------ | ------ | ---------------------------------- |
+| requires_ownership_proof | bool   | Whether ownership proof is required|
+| next_attempt_timestamp   | int32  | Next available OTP request time    |
+| message                  | string | Response message                   |
+
+**Example:**
+
+```bash
+grpcurl -plaintext -d @ -proto protos/v2/vault.proto \
+<your_host>:<your_port> vault.v2.Entity/ResetPassword <<EOF
+{
+  "phone_number": "+237123456789",
+  "email_address": "user@example.com",
+  "captcha_token": "captcha_token_value"
+}
+EOF
+```
+
+#### Step 2: Complete Reset
+
+**Request:** `ResetPasswordRequest`
+
+| Field                      | Type   | Required | Description                                    |
+| ------------------------   | ------ | -------- | -------------------------------                |
+| phone_number               | string | Optional | Phone number in E164 format                    |
+| email_address              | string | Optional | Email address                                  |
+| new_password               | string | Yes      | New secure password                            |
+| ownership_proof_response   | string | Yes      | OTP code from step 1                           |
+| client_id_pub_key          | bytes  | Yes      | Client identification public key               |
+| client_ratchet_pub_key     | bytes  | Yes      | Client ratchet public key                      |
+| client_header_pub_key      | bytes  | Yes      | Client header public key                       |
+| client_next_header_pub_key | bytes  | Yes      | Client next header public key                  |
+| client_nonce               | bytes  | Yes      | Client nonce                                   |
+
+**Response:** `ResetPasswordResponse`
+
+| Field                      | Type   | Description                       |
+| -------------------------- | ------ | --------------------------------- |
+| long_lived_token           | string | Session token                     |
+| server_ratchet_pub_key     | bytes  | Server ratchet public key         |
+| server_header_pub_key      | bytes  | Server header public key          |
+| server_next_header_pub_key | bytes  | Server next header public key     |
+| server_nonce               | bytes  | Server nonce                      |
+| message                    | string | Response message                  |
+
+**Example:**
+
+```bash
+grpcurl -plaintext -d @ -proto protos/v2/vault.proto \
+<your_host>:<your_port> vault.v2.Entity/ResetPassword <<EOF
+{
+  "phone_number": "+237123456789",
+  "email_address": "user@example.com",
+  "new_password": "NewSecurePass123!",
+  "ownership_proof_response": "123456",
+  "captcha_token": "captcha_token_value",
+  "client_id_pub_key": "...",
+  "client_ratchet_pub_key": "...",
+  "client_header_pub_key": "...",
+  "client_next_header_pub_key": "...",
+  "client_nonce": "..."
 }
 EOF
 ```
