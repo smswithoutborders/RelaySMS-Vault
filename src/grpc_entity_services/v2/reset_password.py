@@ -53,32 +53,29 @@ def ResetPassword(self, request, context):
             if not captcha_success:
                 return captcha_error
 
-        identifier_type, identifier_value = self.get_identifier(request)
-        entity_lock = self._get_entity_lock(identifier_value)
-        with entity_lock:
-            success, pow_response = self.handle_pow_initialization(
-                context, request, response, OTPAction.RESET_PASSWORD
-            )
-            if not success:
-                return pow_response
+        success, pow_response = self.handle_pow_initialization(
+            context, request, response, OTPAction.RESET_PASSWORD
+        )
+        if not success:
+            return pow_response
 
-            message, expires = pow_response
+        message, expires = pow_response
 
-            country_code = decode_and_decrypt(entity_obj.country_code)
+        country_code = decode_and_decrypt(entity_obj.country_code)
 
-            stats.create(
-                event_type=StatsEventType.RESET_PASSWORD,
-                country_code=country_code,
-                identifier_type=identifier_type,
-                origin=EntityOrigin(entity_obj.origin),
-                event_stage=StatsEventStage.INITIATE,
-            )
+        stats.create(
+            event_type=StatsEventType.RESET_PASSWORD,
+            country_code=country_code,
+            identifier_type=identifier_type,
+            origin=EntityOrigin(entity_obj.origin),
+            event_stage=StatsEventStage.INITIATE,
+        )
 
-            return response(
-                requires_ownership_proof=True,
-                message=message,
-                next_attempt_timestamp=expires,
-            )
+        return response(
+            requires_ownership_proof=True,
+            message=message,
+            next_attempt_timestamp=expires,
+        )
 
     def complete_reset(entity_obj):
         invalid_fields = self.handle_request_field_validation(
@@ -168,7 +165,6 @@ def ResetPassword(self, request, context):
         )
 
         country_code = decode_and_decrypt(entity_obj.country_code)
-        identifier_type, _ = self.get_identifier(request)
         stats.create(
             event_type=StatsEventType.RESET_PASSWORD,
             country_code=country_code,
@@ -199,27 +195,30 @@ def ResetPassword(self, request, context):
             return invalid_fields
 
         identifier_type, identifier_value = self.get_identifier(request)
-        if identifier_type == ContactType.EMAIL:
-            email_address = identifier_value
-            email_address_hash = hash_data(email_address)
-            entity_obj = find_entity(email_hash=email_address_hash)
-        else:
-            phone_number = identifier_value
-            phone_number_hash = hash_data(phone_number)
-            entity_obj = find_entity(phone_number_hash=phone_number_hash)
 
-        if not entity_obj or not entity_obj.is_verified:
-            return self.handle_create_grpc_error_response(
-                context,
-                response,
-                f"Entity with this {identifier_type.value} not found.",
-                grpc.StatusCode.NOT_FOUND,
-            )
+        entity_lock = self._get_entity_lock(identifier_value)
+        with entity_lock:
+            if identifier_type == ContactType.EMAIL:
+                email_address = identifier_value
+                email_address_hash = hash_data(email_address)
+                entity_obj = find_entity(email_hash=email_address_hash)
+            else:
+                phone_number = identifier_value
+                phone_number_hash = hash_data(phone_number)
+                entity_obj = find_entity(phone_number_hash=phone_number_hash)
 
-        if request.ownership_proof_response:
-            return complete_reset(entity_obj)
+            if not entity_obj or not entity_obj.is_verified:
+                return self.handle_create_grpc_error_response(
+                    context,
+                    response,
+                    f"Entity with this {identifier_type.value} not found.",
+                    grpc.StatusCode.NOT_FOUND,
+                )
 
-        return initiate_reset(entity_obj)
+            if request.ownership_proof_response:
+                return complete_reset(entity_obj)
+
+            return initiate_reset(entity_obj)
 
     except Exception as e:
         return self.handle_create_grpc_error_response(

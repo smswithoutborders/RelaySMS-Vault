@@ -114,51 +114,48 @@ def AuthenticateEntity(self, request, context):
             if not captcha_success:
                 return captcha_error
 
-        identifier_type, identifier_value = self.get_identifier(request)
-        entity_lock = self._get_entity_lock(identifier_value)
-        with entity_lock:
-            success, pow_response = self.handle_pow_initialization(
-                context, request, response, OTPAction.AUTH
-            )
-            if not success:
-                return pow_response
+        success, pow_response = self.handle_pow_initialization(
+            context, request, response, OTPAction.AUTH
+        )
+        if not success:
+            return pow_response
 
-            message, expires = pow_response
-            entity_obj.device_id = None
-            entity_obj.server_state = None
-            entity_obj.client_id_pub_key = request.client_id_pub_key
-            entity_obj.client_ratchet_pub_key = request.client_ratchet_pub_key
-            entity_obj.client_header_pub_key = request.client_header_pub_key
-            entity_obj.client_next_header_pub_key = request.client_next_header_pub_key
-            entity_obj.client_nonce = encrypt_data(request.client_nonce)
-            entity_obj.save(
-                only=[
-                    "device_id",
-                    "server_state",
-                    "client_id_pub_key",
-                    "client_ratchet_pub_key",
-                    "client_header_pub_key",
-                    "client_next_header_pub_key",
-                    "client_nonce",
-                ]
-            )
+        message, expires = pow_response
+        entity_obj.device_id = None
+        entity_obj.server_state = None
+        entity_obj.client_id_pub_key = request.client_id_pub_key
+        entity_obj.client_ratchet_pub_key = request.client_ratchet_pub_key
+        entity_obj.client_header_pub_key = request.client_header_pub_key
+        entity_obj.client_next_header_pub_key = request.client_next_header_pub_key
+        entity_obj.client_nonce = encrypt_data(request.client_nonce)
+        entity_obj.save(
+            only=[
+                "device_id",
+                "server_state",
+                "client_id_pub_key",
+                "client_ratchet_pub_key",
+                "client_header_pub_key",
+                "client_next_header_pub_key",
+                "client_nonce",
+            ]
+        )
 
-            country_code = decode_and_decrypt(entity_obj.country_code)
-            origin = entity_obj.origin
+        country_code = decode_and_decrypt(entity_obj.country_code)
+        origin = entity_obj.origin
 
-            stats.create(
-                event_type=StatsEventType.AUTH,
-                country_code=country_code,
-                identifier_type=identifier_type,
-                origin=EntityOrigin(origin),
-                event_stage=StatsEventStage.INITIATE,
-            )
+        stats.create(
+            event_type=StatsEventType.AUTH,
+            country_code=country_code,
+            identifier_type=identifier_type,
+            origin=EntityOrigin(origin),
+            event_stage=StatsEventStage.INITIATE,
+        )
 
-            return response(
-                requires_ownership_proof=True,
-                message=message,
-                next_attempt_timestamp=expires,
-            )
+        return response(
+            requires_ownership_proof=True,
+            message=message,
+            next_attempt_timestamp=expires,
+        )
 
     def complete_authentication(entity_obj):
         success, pow_response = self.handle_pow_verification(
@@ -234,27 +231,30 @@ def AuthenticateEntity(self, request, context):
             return invalid_fields
 
         identifier_type, identifier_value = self.get_identifier(request)
-        if identifier_type == ContactType.EMAIL:
-            email_address = identifier_value
-            email_address_hash = hash_data(email_address)
-            entity_obj = find_entity(email_hash=email_address_hash)
-        else:
-            phone_number = identifier_value
-            phone_number_hash = hash_data(phone_number)
-            entity_obj = find_entity(phone_number_hash=phone_number_hash)
 
-        if not entity_obj or not entity_obj.is_verified:
-            return self.handle_create_grpc_error_response(
-                context,
-                response,
-                f"Entity with this {identifier_type.value} not found.",
-                grpc.StatusCode.NOT_FOUND,
-            )
+        entity_lock = self._get_entity_lock(identifier_value)
+        with entity_lock:
+            if identifier_type == ContactType.EMAIL:
+                email_address = identifier_value
+                email_address_hash = hash_data(email_address)
+                entity_obj = find_entity(email_hash=email_address_hash)
+            else:
+                phone_number = identifier_value
+                phone_number_hash = hash_data(phone_number)
+                entity_obj = find_entity(phone_number_hash=phone_number_hash)
 
-        if request.ownership_proof_response:
-            return complete_authentication(entity_obj)
+            if not entity_obj or not entity_obj.is_verified:
+                return self.handle_create_grpc_error_response(
+                    context,
+                    response,
+                    f"Entity with this {identifier_type.value} not found.",
+                    grpc.StatusCode.NOT_FOUND,
+                )
 
-        return initiate_authentication(entity_obj)
+            if request.ownership_proof_response:
+                return complete_authentication(entity_obj)
+
+            return initiate_authentication(entity_obj)
 
     except Exception as e:
         return self.handle_create_grpc_error_response(

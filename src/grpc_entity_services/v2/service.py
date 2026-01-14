@@ -45,6 +45,7 @@ class EntityServiceV2(vault_pb2_grpc.EntityServicer):
     )
     _locks_lock: threading.Lock = threading.Lock()
     _nonce_cache: TTLCache = TTLCache(maxsize=10000, ttl=600)
+    _nonce_lock: threading.Lock = threading.Lock()  # Protects nonce cache access
 
     @classmethod
     def _get_entity_lock(cls, identifier: str) -> threading.Lock:
@@ -57,6 +58,11 @@ class EntityServiceV2(vault_pb2_grpc.EntityServicer):
                 cls._entity_locks[identifier_hash] = lock
                 logger.debug("Created new lock for hashed identifier")
             return lock
+
+    @classmethod
+    def _get_nonce_lock(cls) -> threading.Lock:
+        """Get the nonce lock for thread-safe nonce cache access."""
+        return cls._nonce_lock
 
     def handle_create_grpc_error_response(
         self, context, response, error, status_code, **kwargs
@@ -85,7 +91,12 @@ class EntityServiceV2(vault_pb2_grpc.EntityServicer):
         self, context, request, response, required_fields
     ):
         """Validates the fields in the gRPC request."""
-        x25519_fields = {"client_id_pub_key", "client_ratchet_pub_key"}
+        x25519_fields = {
+            "client_id_pub_key",
+            "client_ratchet_pub_key",
+            "client_header_pub_key",
+            "client_next_header_pub_key",
+        }
         nonce_fields = {"client_nonce"}
 
         def field_missing_error(field_names):
@@ -343,10 +354,10 @@ class EntityServiceV2(vault_pb2_grpc.EntityServicer):
                     "Client identity public key not found. Should re-authenticate."
                 )
 
-            if nonce in self._nonce_cache:
-                return None, create_error_response("Nonce has already been used.")
-
-            self._nonce_cache[nonce] = True
+            with self._get_nonce_lock():
+                if nonce in self._nonce_cache:
+                    return None, create_error_response("Nonce has already been used.")
+                self._nonce_cache[nonce] = True
 
             request_string_bytes = (
                 method_name.encode() + timestamp.encode() + bytes.fromhex(nonce)
