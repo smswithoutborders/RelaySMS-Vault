@@ -77,6 +77,16 @@ else
   logger INFO "Pepper file already exists at $PEPPER_FILE. Skipping pepper generation."
 fi
 
+if [ ! -f $SIGNATURE_KEY_FILE ]; then
+  logger INFO "JWT signing key file not found at $SIGNATURE_KEY_FILE. Generating new key."
+  generate_base64_key $SIGNATURE_KEY_FILE || {
+    logger ERROR "Failed to generate JWT signing key."
+    exit 1
+  }
+else
+  logger INFO "JWT signing key file already exists at $SIGNATURE_KEY_FILE. Skipping key generation."
+fi
+
 logger INFO "Running 'make build-setup'."
 make build-setup || {
   logger ERROR "'make build-setup' failed."

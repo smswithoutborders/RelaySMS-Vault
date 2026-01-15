@@ -30,9 +30,10 @@ from src.utils import (
     create_x25519_keypair,
     decode_and_decrypt,
     encrypt_data,
+    get_configs,
     hash_data,
     hash_password,
-    load_ed25519_private_key,
+    load_and_decode_key,
     serialize_and_encrypt,
     verify_password,
 )
@@ -178,7 +179,9 @@ def AuthenticateEntity(self, request, context):
         )
         server_nonce = secrets.token_bytes(16)
 
-        si_private_key = load_ed25519_private_key()
+        signature_key = load_and_decode_key(
+            get_configs("SIGNATURE_KEY_FILE", strict=True), 32
+        )
 
         payload = {
             "eid": eid,
@@ -187,7 +190,7 @@ def AuthenticateEntity(self, request, context):
             "exp": datetime.now(timezone.utc) + timedelta(days=3650),
         }
 
-        long_lived_token = derive_llt_v1(payload, si_private_key)
+        long_lived_token = derive_llt_v1(payload=payload, signing_key=signature_key)
 
         entity_obj.server_ratchet_keypair = serialize_and_encrypt(
             server_ratchet_keypair

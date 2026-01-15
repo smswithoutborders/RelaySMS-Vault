@@ -1,15 +1,16 @@
 # SPDX-License-Identifier: GPL-3.0-only
 """gRPC Entity Service V2"""
 
-import base64
 import re
 import threading
+import time
 import traceback
 import weakref
 
 import grpc
 import phonenumbers
 from cachetools import TTLCache
+from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
 from base_logger import get_logger
@@ -20,21 +21,23 @@ from src.grpc_entity_services.v2.authenticate import AuthenticateEntity
 from src.grpc_entity_services.v2.create import CreateEntity
 from src.grpc_entity_services.v2.list_tokens import ListEntityStoredTokens
 from src.grpc_entity_services.v2.reset_password import ResetPassword
-from src.long_lived_token import derive_llt_shared_secret, verify_llt, verify_llt_v1
+from src.long_lived_token import verify_llt_v1
 from src.otp_service import send_otp, verify_otp
 from src.recaptcha import verify_captcha
 from src.types import ContactType
 from src.utils import (
     decrypt_and_deserialize,
+    get_configs,
     hash_data,
     is_valid_x25519_public_key,
-    load_ed25519_private_key,
+    load_and_decode_key,
 )
 
 logger = get_logger(__name__)
 
 STATIC_KEYPAIR_VERSION = "v1"
 STATIC_KEYPAIR_IDENTIFIER = 254
+NONCE_CACHE_TTL = int(get_configs("NONCE_CACHE_TTL", default_value="600"))
 
 
 class EntityServiceV2(vault_pb2_grpc.EntityServicer):
@@ -44,8 +47,8 @@ class EntityServiceV2(vault_pb2_grpc.EntityServicer):
         weakref.WeakValueDictionary()
     )
     _locks_lock: threading.Lock = threading.Lock()
-    _nonce_cache: TTLCache = TTLCache(maxsize=10000, ttl=600)
-    _nonce_lock: threading.Lock = threading.Lock()  # Protects nonce cache access
+    _nonce_cache: TTLCache = TTLCache(maxsize=10000, ttl=NONCE_CACHE_TTL)
+    _nonce_lock: threading.Lock = threading.Lock()
 
     @classmethod
     def _get_entity_lock(cls, identifier: str) -> threading.Lock:
@@ -326,10 +329,11 @@ class EntityServiceV2(vault_pb2_grpc.EntityServicer):
 
             method_name = getattr(context, "method_name", "")
 
-            si_private_key = load_ed25519_private_key()
-            si_public_key = si_private_key.public_key()
+            signature_key = load_and_decode_key(
+                get_configs("SIGNATURE_KEY_FILE", strict=True), 32
+            )
 
-            payload, llt_error = verify_llt_v1(llt=llt, si_public_key=si_public_key)
+            payload, llt_error = verify_llt_v1(llt=llt, signing_key=signature_key)
 
             if llt_error:
                 return None, create_error_response(llt_error)
@@ -354,6 +358,21 @@ class EntityServiceV2(vault_pb2_grpc.EntityServicer):
                     "Client identity public key not found. Should re-authenticate."
                 )
 
+            current_timestamp = int(time.time())
+            timestamp_diff = abs(current_timestamp - int(timestamp))
+
+            print(
+                ">>>>>>>>>>>>>>>>",
+                NONCE_CACHE_TTL,
+                current_timestamp,
+                timestamp,
+                timestamp_diff,
+            )
+            if timestamp_diff > NONCE_CACHE_TTL:
+                return None, create_error_response(
+                    "Outdated timestamp detected in request."
+                )
+
             with self._get_nonce_lock():
                 if nonce in self._nonce_cache:
                     return None, create_error_response("Nonce has already been used.")
@@ -370,6 +389,9 @@ class EntityServiceV2(vault_pb2_grpc.EntityServicer):
 
             return entity_obj, None
 
+        except InvalidSignature:
+            err_msg = "Invalid signature for Client ID public key."
+            return None, create_error_response(err_msg)
         except Exception as e:
             logger.error("Error validating LLT v1: %s", e)
             return None, create_error_response(str(e))
