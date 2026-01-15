@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 """gRPC Entity Service V2"""
 
+import base64
 import re
 import threading
 import time
@@ -19,9 +20,10 @@ from src.db_models import StaticKeypairs
 from src.entity import find_entity
 from src.grpc_entity_services.v2.authenticate import AuthenticateEntity
 from src.grpc_entity_services.v2.create import CreateEntity
+from src.grpc_entity_services.v2.delete import DeleteEntity
 from src.grpc_entity_services.v2.list_tokens import ListEntityStoredTokens
 from src.grpc_entity_services.v2.reset_password import ResetPassword
-from src.grpc_entity_services.v2.delete import DeleteEntity
+from src.grpc_entity_services.v2.update_password import UpdateEntityPassword
 from src.long_lived_token import verify_llt_v1
 from src.otp_service import send_otp, verify_otp
 from src.recaptcha import verify_captcha
@@ -362,13 +364,6 @@ class EntityServiceV2(vault_pb2_grpc.EntityServicer):
             current_timestamp = int(time.time())
             timestamp_diff = abs(current_timestamp - int(timestamp))
 
-            print(
-                ">>>>>>>>>>>>>>>>",
-                NONCE_CACHE_TTL,
-                current_timestamp,
-                timestamp,
-                timestamp_diff,
-            )
             if timestamp_diff > NONCE_CACHE_TTL:
                 return None, create_error_response(
                     "Outdated timestamp detected in request."
@@ -379,10 +374,11 @@ class EntityServiceV2(vault_pb2_grpc.EntityServicer):
                     return None, create_error_response("Nonce has already been used.")
                 self._nonce_cache[nonce] = True
 
+            nonce_bytes = base64.urlsafe_b64decode(nonce)
+            signature_bytes = base64.urlsafe_b64decode(signature)
             request_string_bytes = (
-                method_name.encode() + timestamp.encode() + bytes.fromhex(nonce)
+                method_name.encode() + timestamp.encode() + nonce_bytes
             )
-            signature_bytes = bytes.fromhex(signature)
             client_id_pub_key = Ed25519PublicKey.from_public_bytes(
                 entity_obj.client_id_pub_key
             )
@@ -445,3 +441,4 @@ class EntityServiceV2(vault_pb2_grpc.EntityServicer):
     ListEntityStoredTokens = ListEntityStoredTokens
     ResetPassword = ResetPassword
     DeleteEntity = DeleteEntity
+    UpdateEntityPassword = UpdateEntityPassword

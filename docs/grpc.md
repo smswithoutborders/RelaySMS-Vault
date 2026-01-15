@@ -11,6 +11,7 @@
     - [v2: List Entity Stored Tokens](#v2-list-entity-stored-tokens)
     - [v2: Delete An Entity](#v2-delete-an-entity)
     - [v2: Reset Password](#v2-reset-password)
+    - [v2: Update Password](#v2-update-password)
 - [Version 1 API](#version-1-api)
   - [v1 Public Service](#v1-public-service)
     - [v1: Create an Entity](#v1-create-an-entity)
@@ -299,12 +300,12 @@ Retrieves all stored tokens for an authenticated entity.
 
 **Headers:**
 
-| Header        | Type   | Required | Description                                        |
-| ------------- | ------ | -------- | ----------------------------------------------     |
-| authorization | string | Yes      | Bearer token (format: `Bearer <long_lived_token>`) |
-| x-sig         | string | Yes      | Request signature (hex-encoded)                    |
-| x-nonce       | string | Yes      | Nonce for request (must be unique, hex-encoded)    |
-| x-timestamp   | string | Yes      | Request timestamp                                  |
+| Header        | Type   | Required | Description                                                  |
+| ------------- | ------ | -------- | ------------------------------------------------------------ |
+| authorization | string | Yes      | Bearer token (format: `Bearer <long_lived_token>`)           |
+| x-sig         | string | Yes      | Request signature (base64 url-safe encoded)                  |
+| x-nonce       | string | Yes      | Nonce for request (must be unique, base64 url-safe encoded)  |
+| x-timestamp   | string | Yes      | Request timestamp                                            |
 
 **Response:** `ListEntityStoredTokensResponse`
 
@@ -327,8 +328,8 @@ Retrieves all stored tokens for an authenticated entity.
 ```bash
 grpcurl -plaintext \
 -H 'authorization: Bearer your_long_lived_token' \
--H 'x-sig: your_signature' \
--H 'x-nonce: unique_nonce' \
+-H 'x-sig: your_signature_base64_urlsafe' \
+-H 'x-nonce: unique_nonce_base64_urlsafe' \
 -H 'x-timestamp: timestamp' \
 -d '{"migrate_to_device": false}' \
 -proto protos/v2/vault.proto \
@@ -352,12 +353,12 @@ Deletes an entity from the vault.
 
 **Headers:**
 
-| Header        | Type   | Required | Description                                        |
-| ------------- | ------ | -------- | ----------------------------------------------     |
-| authorization | string | Yes      | Bearer token (format: `Bearer <long_lived_token>`) |
-| x-sig         | string | Yes      | Request signature (hex-encoded)                    |
-| x-nonce       | string | Yes      | Nonce for request (must be unique, hex-encoded)    |
-| x-timestamp   | string | Yes      | Request timestamp                                  |
+| Header        | Type   | Required | Description                                                  |
+| ------------- | ------ | -------- | ------------------------------------------------------------ |
+| authorization | string | Yes      | Bearer token (format: `Bearer <long_lived_token>`)           |
+| x-sig         | string | Yes      | Request signature (base64 url-safe encoded)                  |
+| x-nonce       | string | Yes      | Nonce for request (must be unique, base64 url-safe encoded)  |
+| x-timestamp   | string | Yes      | Request timestamp                                            |
 
 **Response:** `DeleteEntityResponse`
 
@@ -371,8 +372,8 @@ Deletes an entity from the vault.
 ```bash
 grpcurl -plaintext \
 -H 'authorization: Bearer your_long_lived_token' \
--H 'x-sig: your_signature_hex' \
--H 'x-nonce: unique_nonce_hex' \
+-H 'x-sig: your_signature_base64_urlsafe' \
+-H 'x-nonce: unique_nonce_base64_urlsafe' \
 -H 'x-timestamp: timestamp' \
 -d '{}' \
 -proto protos/v2/vault.proto \
@@ -393,7 +394,13 @@ Resets an entity's password with two-step verification.
 | -------------------------- | ------ | -------- | ----------------------------------------------  |
 | phone_number               | string | Optional | Phone number in E164 format                     |
 | email_address              | string | Optional | Email address                                   |
+| new_password               | string | Yes      | New secure password                             |
 | captcha_token              | string | Yes*     | Captcha verification token (*if captcha enabled)|
+| client_id_pub_key          | bytes  | Yes      | Client identification public key                |
+| client_ratchet_pub_key     | bytes  | Yes      | Client ratchet public key                       |
+| client_header_pub_key      | bytes  | Yes      | Client header public key                        |
+| client_next_header_pub_key | bytes  | Yes      | Client next header public key                   |
+| client_nonce               | bytes  | Yes      | Client nonce                                    |
 
 **Response:** `ResetPasswordResponse`
 
@@ -411,7 +418,13 @@ grpcurl -plaintext -d @ -proto protos/v2/vault.proto \
 {
   "phone_number": "+237123456789",
   "email_address": "user@example.com",
-  "captcha_token": "captcha_token_value"
+  "new_password": "NewSecurePass123!",
+  "captcha_token": "captcha_token_value",
+  "client_id_pub_key": "...",
+  "client_ratchet_pub_key": "...",
+  "client_header_pub_key": "...",
+  "client_next_header_pub_key": "...",
+  "client_nonce": "..."
 }
 EOF
 ```
@@ -459,6 +472,56 @@ grpcurl -plaintext -d @ -proto protos/v2/vault.proto \
   "client_header_pub_key": "...",
   "client_next_header_pub_key": "...",
   "client_nonce": "..."
+}
+EOF
+```
+
+---
+
+### v2: Update Password
+
+Updates an entity's password.
+
+> [!WARNING]
+>
+> - This action requires authentication headers.
+
+**Request:** `UpdateEntityPasswordRequest`
+
+| Field            | Type   | Required | Description          |
+| ---------------- | ------ | -------- | -------------------- |
+| current_password | string | Yes      | Current password     |
+| new_password     | string | Yes      | New secure password  |
+
+**Headers:**
+
+| Header        | Type   | Required | Description                                                  |
+| ------------- | ------ | -------- | ------------------------------------------------------------ |
+| authorization | string | Yes      | Bearer token (format: `Bearer <long_lived_token>`)           |
+| x-sig         | string | Yes      | Request signature (base64 url-safe encoded)                  |
+| x-nonce       | string | Yes      | Nonce for request (must be unique, base64 url-safe encoded)  |
+| x-timestamp   | string | Yes      | Request timestamp                                            |
+
+**Response:** `UpdateEntityPasswordResponse`
+
+| Field   | Type   | Description       |
+| ------- | ------ | ----------------- |
+| message | string | Response message  |
+| success | bool   | Operation success |
+
+**Example:**
+
+```bash
+grpcurl -plaintext \
+-H 'authorization: Bearer your_long_lived_token' \
+-H 'x-sig: your_signature_base64_urlsafe' \
+-H 'x-nonce: unique_nonce_base64_urlsafe' \
+-H 'x-timestamp: timestamp' \
+-d @ -proto protos/v2/vault.proto \
+<your_host>:<your_port> vault.v2.Entity/UpdateEntityPassword <<EOF
+{
+  "current_password": "CurrentPass123!",
+  "new_password": "NewPass123!"
 }
 EOF
 ```

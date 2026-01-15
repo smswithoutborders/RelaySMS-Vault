@@ -79,31 +79,6 @@ def ResetPassword(self, request, context):
         )
 
     def complete_reset(entity_obj):
-        invalid_fields = self.handle_request_field_validation(
-            context,
-            request,
-            response,
-            [
-                "new_password",
-                "client_id_pub_key",
-                "client_ratchet_pub_key",
-                "client_header_pub_key",
-                "client_next_header_pub_key",
-                "client_nonce",
-            ],
-        )
-        if invalid_fields:
-            return invalid_fields
-
-        password_error = validate_password_strength(request.new_password)
-        if password_error:
-            return self.handle_create_grpc_error_response(
-                context,
-                response,
-                password_error,
-                grpc.StatusCode.INVALID_ARGUMENT,
-            )
-
         success, pow_response = self.handle_pow_verification(
             context, request, response, OTPAction.RESET_PASSWORD
         )
@@ -187,15 +162,39 @@ def ResetPassword(self, request, context):
             server_nonce=server_nonce,
         )
 
-    try:
+    def validate_fields():
         invalid_fields = self.handle_request_field_validation(
             context,
             request,
             response,
-            [("phone_number", "email_address")],
+            [
+                ("phone_number", "email_address"),
+                "new_password",
+                "client_id_pub_key",
+                "client_ratchet_pub_key",
+                "client_header_pub_key",
+                "client_next_header_pub_key",
+                "client_nonce",
+            ],
         )
         if invalid_fields:
             return invalid_fields
+
+        invalid_password = validate_password_strength(request.new_password)
+        if invalid_password:
+            return self.handle_create_grpc_error_response(
+                context,
+                response,
+                invalid_password,
+                grpc.StatusCode.INVALID_ARGUMENT,
+            )
+
+        return None
+
+    try:
+        invalid_fields_response = validate_fields()
+        if invalid_fields_response:
+            return invalid_fields_response
 
         identifier_type, identifier_value = self.get_identifier(request)
 
