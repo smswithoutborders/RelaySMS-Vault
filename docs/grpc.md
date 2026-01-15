@@ -9,6 +9,7 @@
     - [v2: Create an Entity](#v2-create-an-entity)
     - [v2: Authenticate an Entity](#v2-authenticate-an-entity)
     - [v2: List Entity Stored Tokens](#v2-list-entity-stored-tokens)
+    - [v2: Delete An Entity](#v2-delete-an-entity)
     - [v2: Reset Password](#v2-reset-password)
 - [Version 1 API](#version-1-api)
   - [v1 Public Service](#v1-public-service)
@@ -286,19 +287,23 @@ EOF
 
 Retrieves all stored tokens for an authenticated entity.
 
+> [!WARNING]
+>
+> - This action requires authentication headers.
+
 **Request:** `ListEntityStoredTokensRequest`
 
 | Field             | Type | Required | Description                                  |
 | ----------------- | ---- | -------- | -------------------------------------------- |
 | migrate_to_device | bool | No       | Remove from cloud and send to device         |
 
-**Required Headers:**
+**Headers:**
 
 | Header        | Type   | Required | Description                                        |
 | ------------- | ------ | -------- | ----------------------------------------------     |
 | authorization | string | Yes      | Bearer token (format: `Bearer <long_lived_token>`) |
-| x-sig         | string | Yes      | Request signature                                  |
-| x-nonce       | string | Yes      | Nonce for request (must be unique)                 |
+| x-sig         | string | Yes      | Request signature (hex-encoded)                    |
+| x-nonce       | string | Yes      | Nonce for request (must be unique, hex-encoded)    |
 | x-timestamp   | string | Yes      | Request timestamp                                  |
 
 **Response:** `ListEntityStoredTokensResponse`
@@ -328,6 +333,50 @@ grpcurl -plaintext \
 -d '{"migrate_to_device": false}' \
 -proto protos/v2/vault.proto \
 <your_host>:<your_port> vault.v2.Entity/ListEntityStoredTokens
+```
+
+---
+
+### v2: Delete An Entity
+
+Deletes an entity from the vault.
+
+> [!WARNING]
+>
+> - This action requires authentication headers.
+> - All stored tokens must be revoked before deletion.
+
+**Request:** `DeleteEntityRequest`
+
+(No request fields required - authentication is handled via headers)
+
+**Headers:**
+
+| Header        | Type   | Required | Description                                        |
+| ------------- | ------ | -------- | ----------------------------------------------     |
+| authorization | string | Yes      | Bearer token (format: `Bearer <long_lived_token>`) |
+| x-sig         | string | Yes      | Request signature (hex-encoded)                    |
+| x-nonce       | string | Yes      | Nonce for request (must be unique, hex-encoded)    |
+| x-timestamp   | string | Yes      | Request timestamp                                  |
+
+**Response:** `DeleteEntityResponse`
+
+| Field   | Type   | Description          |
+| ------- | ------ | -------------------- |
+| message | string | Response message     |
+| success | bool   | Operation success    |
+
+**Example:**
+
+```bash
+grpcurl -plaintext \
+-H 'authorization: Bearer your_long_lived_token' \
+-H 'x-sig: your_signature_hex' \
+-H 'x-nonce: unique_nonce_hex' \
+-H 'x-timestamp: timestamp' \
+-d '{}' \
+-proto protos/v2/vault.proto \
+<your_host>:<your_port> vault.v2.Entity/DeleteEntity
 ```
 
 ---
