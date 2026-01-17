@@ -276,61 +276,44 @@ class EntityServiceV2(vault_pb2_grpc.EntityServicer):
                 ),
             )
 
-        def extract_metadata(context):
+        def extract_metadata(context) -> tuple[dict | None, grpc.RpcError | None]:
             metadata = dict(context.invocation_metadata())
-            authorization = metadata.get("authorization")
-            signature = metadata.get("x-sig")
-            nonce = metadata.get("x-nonce")
-            timestamp = metadata.get("x-timestamp")
 
+            authorization = metadata.get("authorization")
             if not authorization:
-                return (
-                    None,
-                    None,
-                    None,
-                    None,
-                    create_error_response("Missing Authorization header"),
-                )
+                return None, create_error_response("Missing Authorization header")
 
             if not authorization.startswith("Bearer "):
-                return (
-                    None,
-                    None,
-                    None,
-                    None,
-                    create_error_response(
-                        "Invalid Authorization header format. Expected 'Bearer <token>'"
-                    ),
+                return None, create_error_response(
+                    "Invalid Authorization header format. Expected 'Bearer <token>'"
                 )
 
-            llt = authorization[7:]
+            result = {
+                "llt": authorization[7:],
+                "signature": metadata.get("x-sig"),
+                "nonce": metadata.get("x-nonce"),
+                "timestamp": metadata.get("x-timestamp"),
+                "method_name": metadata.get("x-method-name") or context.method_name,
+            }
 
-            if not signature or not nonce or not timestamp:
-                missing = []
-                if not signature:
-                    missing.append("X-Sig")
-                if not nonce:
-                    missing.append("X-Nonce")
-                if not timestamp:
-                    missing.append("X-Timestamp")
-                return (
-                    None,
-                    None,
-                    None,
-                    None,
-                    create_error_response(
-                        f"Missing required metadata: {', '.join(missing)}"
-                    ),
+            missing = [k for k in ("signature", "nonce", "timestamp") if not result[k]]
+            if missing:
+                return None, create_error_response(
+                    f"Missing required metadata: {', '.join(m.upper().replace('_', '-') for m in missing)}"
                 )
 
-            return llt, signature, nonce, timestamp, None
+            return result, None
 
         try:
-            llt, signature, nonce, timestamp, metadata_error = extract_metadata(context)
+            metadata, metadata_error = extract_metadata(context)
             if metadata_error:
                 return None, metadata_error
 
-            method_name = getattr(context, "method_name", "")
+            llt = metadata["llt"]
+            timestamp = metadata["timestamp"]
+            nonce = metadata["nonce"]
+            signature = metadata["signature"]
+            method_name = metadata["method_name"]
 
             signature_key = load_and_decode_key(
                 get_configs("SIGNATURE_KEY_FILE", strict=True), 32

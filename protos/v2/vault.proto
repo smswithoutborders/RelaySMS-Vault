@@ -253,6 +253,13 @@ message EncryptPayloadResponse {
 }
 
 // Request message for storing an entity's token.
+//
+// Headers:
+// authorization = Bearer token (format: `Bearer <long_lived_token>`) 
+// x-sig = Request signature (base64 url-safe encoded)
+// x-nonce = Nonce for request (must be unique, base64 url-safe encoded)
+// x-timestamp = Request timestamp
+// x-method-name = RPC URI (e.g., /vault.v2.EntityInternal/StoreEntityToken)
 message StoreEntityTokenRequest {
   // The OAuth2 token to be stored (JSON string).
   string token = 1;

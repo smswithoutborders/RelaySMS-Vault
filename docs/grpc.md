@@ -12,6 +12,9 @@
     - [v2: Delete An Entity](#v2-delete-an-entity)
     - [v2: Reset Password](#v2-reset-password)
     - [v2: Update Password](#v2-update-password)
+  - [v2 Internal Service](#v2-internal-service)
+    - [v2: Store Token](#v2-store-token)
+    - [v2: Decrypt Payload](#v2-decrypt-payload)
 - [Version 1 API](#version-1-api)
   - [v1 Public Service](#v1-public-service)
     - [v1: Create an Entity](#v1-create-an-entity)
@@ -39,7 +42,7 @@ curl -O -L https://raw.githubusercontent.com/smswithoutborders/RelaySMS-Vault/st
 ```
 
 **Package:** `vault.v2`  
-**Service:** `Entity`
+**Services:** `Entity`, `EntityInternal`
 
 ### Version 1
 
@@ -107,7 +110,7 @@ python3 grpc_internal_server.py
 ## Version 2 API
 
 **Package:** `vault.v2`  
-**Service:** `Entity`
+**Services:** `Entity`, `EntityInternal`
 
 ---
 
@@ -522,6 +525,101 @@ grpcurl -plaintext \
 {
   "current_password": "CurrentPass123!",
   "new_password": "NewPass123!"
+}
+EOF
+```
+
+---
+
+## v2 Internal Service
+
+Service for internal backend operations.
+
+### v2: Store Token
+
+Stores an OAuth2 token for an authenticated entity.
+
+> [!WARNING]
+>
+> - This action requires authentication headers.
+
+**Request:** `StoreEntityTokenRequest`
+
+| Field              | Type   | Required | Description                |
+| ------------------ | ------ | -------- | -------------------------- |
+| token              | string | Yes      | OAuth2 token (JSON string) |
+| platform           | string | Yes      | Platform name              |
+| account_identifier | string | Yes      | Account identifier         |
+
+**Headers:**
+
+| Header        | Type   | Required | Description                                                  |
+| ------------- | ------ | -------- | ------------------------------------------------------------ |
+| authorization | string | Yes      | Bearer token (format: `Bearer <long_lived_token>`)           |
+| x-sig         | string | Yes      | Request signature (base64 url-safe encoded)                  |
+| x-nonce       | string | Yes      | Nonce for request (must be unique, base64 url-safe encoded)  |
+| x-timestamp   | string | Yes      | Request timestamp                                            |
+
+**Response:** `StoreEntityTokenResponse`
+
+| Field   | Type   | Description       |
+| ------- | ------ | ----------------- |
+| message | string | Response message  |
+| success | bool   | Operation success |
+
+**Example:**
+
+```bash
+grpcurl -plaintext \
+-H 'authorization: Bearer your_long_lived_token' \
+-H 'x-sig: your_signature_base64_urlsafe' \
+-H 'x-nonce: unique_nonce_base64_urlsafe' \
+-H 'x-timestamp: timestamp' \
+-d @ -proto protos/v2/vault.proto \
+<your_host>:<your_port> vault.v2.EntityInternal/StoreEntityToken <<EOF
+{
+  "token": "{\"access_token\":\"...\"}",
+  "platform": "gmail",
+  "account_identifier": "user@gmail.com"
+}
+EOF
+```
+
+---
+
+### v2: Decrypt Payload
+
+Decrypts an encrypted payload from the RelaySMS protocol.
+
+**Request:** `DecryptPayloadRequest`
+
+| Field              | Type   | Required | Description                        |
+| ------------------ | ------ | -------- | ---------------------------------- |
+| device_id          | string | Optional | Device identifier                  |
+| phone_number       | string | Optional | Phone number (E164 format)         |
+| payload_ciphertext | string | Yes      | Encrypted payload                  |
+
+> [!NOTE]
+>
+> Either `device_id` or `phone_number` must be provided.
+
+**Response:** `DecryptPayloadResponse`
+
+| Field             | Type   | Description              |
+| ----------------- | ------ | ------------------------ |
+| payload_plaintext | string | Decrypted payload (base64 encoded) |
+| message           | string | Response message         |
+| success           | bool   | Operation success        |
+| country_code      | string | Entity's country code    |
+
+**Example:**
+
+```bash
+grpcurl -plaintext -d @ -proto protos/v2/vault.proto \
+<your_host>:<your_port> vault.v2.EntityInternal/DecryptPayload <<EOF
+{
+  "device_id": "device_123",
+  "payload_ciphertext": "encrypted_payload_data"
 }
 EOF
 ```
