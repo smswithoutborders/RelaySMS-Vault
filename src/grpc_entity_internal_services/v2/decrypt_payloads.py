@@ -87,6 +87,7 @@ def DecryptPayload(self, request, context):
                 client_header_pub_key=entity_obj.client_header_pub_key,
                 client_next_header_pub_key=entity_obj.client_next_header_pub_key,
                 client_nonce=client_nonce,
+                client_id_pub_key=entity_obj.client_id_pub_key,
                 use_header_encryption=use_header_encryption,
             )
         else:
@@ -181,7 +182,6 @@ def DecryptPayload(self, request, context):
         with entity_lock:
             logger.debug("Acquired lock for entity")
             entity_obj = find_entity(eid=entity_id)
-
             decoded_response, decoding_error = decode_message()
             if decoding_error:
                 return decoding_error

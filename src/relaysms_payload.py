@@ -44,9 +44,11 @@ def _initialize_ratchet_state(
         server_identity_keypair.pnt_keystore, server_identity_keypair.secret_key
     )
     if not server_ratchet_keypair:
+        logger.debug("Generating root key with standard agree ...")
         root_key = server_identity_keypair.agree(client_ratchet_pub_key)
         return state, root_key, None, None
 
+    logger.debug("Generating root key with authenticated agree and nonces...")
     root_key, header_key, next_header_key = (
         server_ratchet_keypair.agreeWithAuthAndNonce(
             auth_private_key=server_identity_private,
