@@ -7,8 +7,7 @@ from datetime import datetime, timedelta
 from typing import Optional, Tuple
 
 import jwt
-from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import ed25519
+from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
 from base_logger import get_logger
@@ -56,43 +55,35 @@ def verify_llt(llt, key):
         return None, error
 
 
-def derive_llt_v1(payload: dict, si_private_key: ed25519.Ed25519PrivateKey) -> str:
+def derive_llt_v1(payload: dict, signing_key: bytes) -> str:
     """
     Generate a Long-Lived Token (LLT) v1.
 
     Server generates the LLT as follows:
-    LLT = JWT().encode(payload, SI_sig, alg="EdDSA")
+    LLT = JWT().encode(payload, signing_key, alg="HS256")
 
     Args:
         payload (dict): The JWT payload containing claims.
-        si_private_key (ed25519.Ed25519PrivateKey): Server's Ed25519 private signing key.
+        signing_key (bytes): Server's HS256 signing key.
 
     Returns:
         str: Signed JWT token (LLT).
     """
-    logger.debug("Generating LLT v1 with EdDSA signing...")
+    logger.debug("Generating LLT v1 with HS256 signing...")
 
-    private_key_bytes = si_private_key.private_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PrivateFormat.PKCS8,
-        encryption_algorithm=serialization.NoEncryption(),
-    )
-
-    logger.debug("Encoding the long-lived token with EdDSA algorithm...")
-    llt = jwt.encode(payload, private_key_bytes, algorithm="EdDSA")
+    logger.debug("Encoding the long-lived token with HS256 algorithm...")
+    llt = jwt.encode(payload, signing_key, algorithm="HS256")
 
     return llt
 
 
-def verify_llt_v1(
-    llt: str, si_public_key: ed25519.Ed25519PublicKey
-) -> Tuple[Optional[dict], Optional[str]]:
+def verify_llt_v1(llt: str, signing_key: bytes) -> Tuple[Optional[dict], Optional[str]]:
     """
     Verify a Long-Lived Token (LLT) v1.
 
     Args:
         llt (str): The LLT JWT to verify.
-        si_public_key (ed25519.Ed25519PublicKey): Server's Ed25519 public key.
+        signing_key (bytes): Server's HS256 signing key.
 
     Returns:
         tuple: A tuple containing two items:
@@ -100,14 +91,9 @@ def verify_llt_v1(
             - str or None: Error message if LLT is invalid, None if LLT is valid.
     """
     try:
-        logger.debug("Verifying LLT v1 with EdDSA signature...")
+        logger.debug("Verifying LLT v1 with HS256 signature...")
 
-        public_key_bytes = si_public_key.public_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PublicFormat.SubjectPublicKeyInfo,
-        )
-
-        payload = jwt.decode(llt, public_key_bytes, algorithms=["EdDSA"])
+        payload = jwt.decode(llt, signing_key, algorithms=["HS256"])
 
         logger.debug("LLT v1 verified successfully")
         return payload, None

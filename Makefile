@@ -81,13 +81,8 @@ generate-static-keys:
 	$(PYTHON) -m scripts.x25519_keygen export --skip-if-exists
 	$(call log_message,[INFO] x25519 static keys generated successfully.)
 
-generate-signature-key:
-	$(call log_message,[INFO] Generating ed25519 signature key ...)
-	@$(PYTHON) -m scripts.ed25519_keygen
-	$(call log_message,[INFO] Ed25519 signature key generated successfully.)
-
 build-setup: grpc-compile download-platforms
-runtime-setup: create-dummy-user generate-static-keys generate-signature-key
+runtime-setup: create-dummy-user generate-static-keys
 
 clean:
 	$(call log_message,[INFO] Cleaning build, environment, and generated files ...)

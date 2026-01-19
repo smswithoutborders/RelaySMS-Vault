@@ -27,9 +27,10 @@ from src.utils import (
     encrypt_and_encode,
     encrypt_data,
     generate_eid,
+    get_configs,
     hash_data,
     hash_password,
-    load_ed25519_private_key,
+    load_and_decode_key,
     serialize_and_encrypt,
 )
 
@@ -80,75 +81,71 @@ def CreateEntity(self, request, context):
             if not captcha_success:
                 return captcha_error
 
-        identifier_type, identifier_value = self.get_identifier(request)
         identifier_hash = hash_data(identifier_value)
         password_hash = hash_password(request.password)
         country_code_ciphertext_b64 = encrypt_and_encode(request.country_code)
-        entity_lock = self._get_entity_lock(identifier_value)
-        with entity_lock:
-            success, pow_response = self.handle_pow_initialization(
-                context, request, response, OTPAction.SIGNUP
+
+        success, pow_response = self.handle_pow_initialization(
+            context, request, response, OTPAction.SIGNUP
+        )
+
+        if not success:
+            return pow_response
+
+        message, expires = pow_response
+        if entity_obj:
+            entity_obj.password_hash = password_hash
+            entity_obj.country_code = country_code_ciphertext_b64
+            entity_obj.client_id_pub_key = request.client_id_pub_key
+            entity_obj.client_ratchet_pub_key = request.client_ratchet_pub_key
+            entity_obj.client_header_pub_key = request.client_header_pub_key
+            entity_obj.client_next_header_pub_key = request.client_next_header_pub_key
+            entity_obj.client_nonce = encrypt_data(request.client_nonce)
+            entity_obj.save(
+                only=[
+                    "password_hash",
+                    "country_code",
+                    "client_id_pub_key",
+                    "client_ratchet_pub_key",
+                    "client_header_pub_key",
+                    "client_next_header_pub_key",
+                    "client_nonce",
+                ]
             )
+        else:
+            eid = generate_eid(identifier_hash)
+            fields = {
+                "eid": eid,
+                "password_hash": password_hash,
+                "country_code": country_code_ciphertext_b64,
+                "client_id_pub_key": request.client_id_pub_key,
+                "client_ratchet_pub_key": request.client_ratchet_pub_key,
+                "client_header_pub_key": request.client_header_pub_key,
+                "client_next_header_pub_key": request.client_next_header_pub_key,
+                "client_nonce": encrypt_data(request.client_nonce),
+                "origin": EntityOrigin.WEB.value,
+                "is_verified": False,
+            }
+            if identifier_type == ContactType.EMAIL:
+                fields["email_hash"] = identifier_hash
+            if identifier_type == ContactType.PHONE:
+                fields["phone_number_hash"] = identifier_hash
 
-            if not success:
-                return pow_response
+            create_entity(**fields)
 
-            message, expires = pow_response
-            if entity_obj:
-                entity_obj.password_hash = password_hash
-                entity_obj.country_code = country_code_ciphertext_b64
-                entity_obj.client_id_pub_key = request.client_id_pub_key
-                entity_obj.client_ratchet_pub_key = request.client_ratchet_pub_key
-                entity_obj.client_header_pub_key = request.client_header_pub_key
-                entity_obj.client_next_header_pub_key = (
-                    request.client_next_header_pub_key
-                )
-                entity_obj.client_nonce = encrypt_data(request.client_nonce)
-                entity_obj.save(
-                    only=[
-                        "password_hash",
-                        "country_code",
-                        "client_id_pub_key",
-                        "client_ratchet_pub_key",
-                        "client_header_pub_key",
-                        "client_next_header_pub_key",
-                        "client_nonce",
-                    ]
-                )
-            else:
-                eid = generate_eid(identifier_hash)
-                fields = {
-                    "eid": eid,
-                    "password_hash": password_hash,
-                    "country_code": country_code_ciphertext_b64,
-                    "client_id_pub_key": request.client_id_pub_key,
-                    "client_ratchet_pub_key": request.client_ratchet_pub_key,
-                    "client_header_pub_key": request.client_header_pub_key,
-                    "client_next_header_pub_key": request.client_next_header_pub_key,
-                    "client_nonce": encrypt_data(request.client_nonce),
-                    "origin": EntityOrigin.WEB.value,
-                    "is_verified": False,
-                }
-                if identifier_type == ContactType.EMAIL:
-                    fields["email_hash"] = identifier_hash
-                if identifier_type == ContactType.PHONE:
-                    fields["phone_number_hash"] = identifier_hash
+        stats.create(
+            event_type=StatsEventType.SIGNUP,
+            country_code=request.country_code,
+            identifier_type=identifier_type,
+            origin=EntityOrigin.WEB,
+            event_stage=StatsEventStage.INITIATE,
+        )
 
-                create_entity(**fields)
-
-            stats.create(
-                event_type=StatsEventType.SIGNUP,
-                country_code=request.country_code,
-                identifier_type=identifier_type,
-                origin=EntityOrigin.WEB,
-                event_stage=StatsEventStage.INITIATE,
-            )
-
-            return response(
-                requires_ownership_proof=True,
-                next_attempt_timestamp=expires,
-                message=message,
-            )
+        return response(
+            requires_ownership_proof=True,
+            next_attempt_timestamp=expires,
+            message=message,
+        )
 
     def complete_creation(entity_obj):
         success, pow_response = self.handle_pow_verification(
@@ -157,7 +154,6 @@ def CreateEntity(self, request, context):
         if not success:
             return pow_response
 
-        identifier_type, _ = self.get_identifier(request)
         eid = entity_obj.eid.hex
 
         clear_keystore(eid)
@@ -173,7 +169,9 @@ def CreateEntity(self, request, context):
 
         server_nonce = secrets.token_bytes(16)
 
-        si_private_key = load_ed25519_private_key()
+        signature_key = load_and_decode_key(
+            get_configs("SIGNATURE_KEY_FILE", strict=True), 32
+        )
 
         payload = {
             "eid": eid,
@@ -182,7 +180,7 @@ def CreateEntity(self, request, context):
             "exp": datetime.now(timezone.utc) + timedelta(days=3650),
         }
 
-        long_lived_token = derive_llt_v1(payload, si_private_key)
+        long_lived_token = derive_llt_v1(payload=payload, signing_key=signature_key)
 
         entity_obj.server_ratchet_keypair = serialize_and_encrypt(
             server_ratchet_keypair
@@ -228,27 +226,30 @@ def CreateEntity(self, request, context):
             return invalid_fields
 
         identifier_type, identifier_value = self.get_identifier(request)
-        if identifier_type == ContactType.EMAIL:
-            email_address = identifier_value
-            email_address_hash = hash_data(email_address)
-            entity_obj = find_entity(email_hash=email_address_hash)
-        else:
-            phone_number = identifier_value
-            phone_number_hash = hash_data(phone_number)
-            entity_obj = find_entity(phone_number_hash=phone_number_hash)
 
-        if entity_obj and entity_obj.is_verified:
-            return self.handle_create_grpc_error_response(
-                context,
-                response,
-                f"Entity with this {identifier_type.value} already exists.",
-                grpc.StatusCode.ALREADY_EXISTS,
-            )
+        entity_lock = self._get_entity_lock(identifier_value)
+        with entity_lock:
+            if identifier_type == ContactType.EMAIL:
+                email_address = identifier_value
+                email_address_hash = hash_data(email_address)
+                entity_obj = find_entity(email_hash=email_address_hash)
+            else:
+                phone_number = identifier_value
+                phone_number_hash = hash_data(phone_number)
+                entity_obj = find_entity(phone_number_hash=phone_number_hash)
 
-        if request.ownership_proof_response:
-            return complete_creation(entity_obj)
+            if entity_obj and entity_obj.is_verified:
+                return self.handle_create_grpc_error_response(
+                    context,
+                    response,
+                    f"Entity with this {identifier_type.value} already exists.",
+                    grpc.StatusCode.ALREADY_EXISTS,
+                )
 
-        return initiate_creation(entity_obj)
+            if request.ownership_proof_response:
+                return complete_creation(entity_obj)
+
+            return initiate_creation(entity_obj)
 
     except Exception as e:
         return self.handle_create_grpc_error_response(
