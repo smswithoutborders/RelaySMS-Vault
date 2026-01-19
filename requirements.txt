@@ -17,6 +17,6 @@ pycryptodome==3.23.0
 PyJWT==2.10.1
 pytest==9.0.2
 requests==2.32.5
-smswithoutborders_libsig @ git+https://github.com/smswithoutborders/lib_signal_double_ratchet_python.git@v0.2.0
+smswithoutborders_libsig @ git+https://github.com/smswithoutborders/lib_signal_double_ratchet_python.git@staging
 tqdm==4.67.1
 twilio==9.9.0
