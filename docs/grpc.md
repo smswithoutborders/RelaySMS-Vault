@@ -14,6 +14,8 @@
     - [v2: Update Password](#v2-update-password)
   - [v2 Internal Service](#v2-internal-service)
     - [v2: Store Token](#v2-store-token)
+    - [v2: Get Access Token](#v2-get-access-token)
+    - [v2: Delete Token](#v2-delete-token)
     - [v2: Decrypt Payload](#v2-decrypt-payload)
 - [Version 1 API](#version-1-api)
   - [v1 Public Service](#v1-public-service)
@@ -579,6 +581,113 @@ grpcurl -plaintext \
 <your_host>:<your_port> vault.v2.EntityInternal/StoreEntityToken <<EOF
 {
   "token": "{\"access_token\":\"...\"}",
+  "platform": "gmail",
+  "account_identifier": "user@gmail.com"
+}
+EOF
+```
+
+---
+
+### v2: Get Access Token
+
+Retrieves an entity's access token for a specific platform.
+
+> [!WARNING]
+>
+> - This action requires authentication headers.
+
+**Request:** `GetEntityAccessTokenRequest`
+
+| Field              | Type   | Required | Description                        |
+| ------------------ | ------ | -------- | ---------------------------------- |
+| device_id          | string | Optional | Device identifier                  |
+| phone_number       | string | Optional | Phone number (E164 format)         |
+| platform           | string | Yes      | Platform name                      |
+| account_identifier | string | Yes      | Account identifier                 |
+
+> [!NOTE]
+>
+> Either `device_id`, `phone_number`, or authentication headers must be provided.
+
+**Headers (when not using device_id or phone_number):**
+
+| Header        | Type   | Required | Description                                                  |
+| ------------- | ------ | -------- | ------------------------------------------------------------ |
+| authorization | string | Yes      | Bearer token (format: `Bearer <long_lived_token>`)           |
+| x-sig         | string | Yes      | Request signature (base64 url-safe encoded)                  |
+| x-nonce       | string | Yes      | Nonce for request (must be unique, base64 url-safe encoded)  |
+| x-timestamp   | string | Yes      | Request timestamp                                            |
+
+**Response:** `GetEntityAccessTokenResponse`
+
+| Field   | Type   | Description              |
+| ------- | ------ | ------------------------ |
+| token   | string | Access token (JSON)      |
+| message | string | Response message         |
+| success | bool   | Operation success        |
+
+**Example:**
+
+```bash
+grpcurl -plaintext \
+-H 'authorization: Bearer your_long_lived_token' \
+-H 'x-sig: your_signature_base64_urlsafe' \
+-H 'x-nonce: unique_nonce_base64_urlsafe' \
+-H 'x-timestamp: timestamp' \
+-d @ -proto protos/v2/vault.proto \
+<your_host>:<your_port> vault.v2.EntityInternal/GetEntityAccessToken <<EOF
+{
+  "platform": "gmail",
+  "account_identifier": "user@gmail.com"
+}
+EOF
+```
+
+---
+
+### v2: Delete Token
+
+Deletes an entity's stored token for a specific platform.
+
+> [!WARNING]
+>
+> - This action requires authentication headers.
+
+**Request:** `DeleteEntityTokenRequest`
+
+| Field              | Type   | Required | Description        |
+| ------------------ | ------ | -------- | ------------------ |
+| platform           | string | Yes      | Platform name      |
+| account_identifier | string | Yes      | Account identifier |
+
+**Headers:**
+
+| Header        | Type   | Required | Description                                                  |
+| ------------- | ------ | -------- | ------------------------------------------------------------ |
+| authorization | string | Yes      | Bearer token (format: `Bearer <long_lived_token>`)           |
+| x-sig         | string | Yes      | Request signature (base64 url-safe encoded)                  |
+| x-nonce       | string | Yes      | Nonce for request (must be unique, base64 url-safe encoded)  |
+| x-timestamp   | string | Yes      | Request timestamp                                            |
+
+**Response:** `DeleteEntityTokenResponse`
+
+| Field   | Type   | Description       |
+| ------- | ------ | ----------------- |
+| message | string | Response message  |
+| success | bool   | Operation success |
+
+**Example:**
+
+```bash
+grpcurl -plaintext \
+-H 'authorization: Bearer your_long_lived_token' \
+-H 'x-sig: your_signature_base64_urlsafe' \
+-H 'x-nonce: unique_nonce_base64_urlsafe' \
+-H 'x-timestamp: timestamp' \
+-d @ -proto protos/v2/vault.proto \
+<your_host>:<your_port> vault.v2.EntityInternal/DeleteEntityToken <<EOF
+{
   "platform": "gmail",
   "account_identifier": "user@gmail.com"
 }

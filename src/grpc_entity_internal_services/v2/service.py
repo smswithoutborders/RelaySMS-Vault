@@ -19,6 +19,8 @@ from protos.v2 import vault_pb2_grpc
 from src.db_models import StaticKeypairs
 from src.entity import find_entity
 from src.grpc_entity_internal_services.v2.decrypt_payloads import DecryptPayload
+from src.grpc_entity_internal_services.v2.delete_token import DeleteEntityToken
+from src.grpc_entity_internal_services.v2.get_token import GetEntityAccessToken
 from src.grpc_entity_internal_services.v2.store_token import StoreEntityToken
 from src.long_lived_token import verify_llt_v1
 from src.utils import (
@@ -44,6 +46,10 @@ class EntityInternalServiceV2(vault_pb2_grpc.EntityInternalServicer):
     _locks_lock: threading.Lock = threading.Lock()
     _nonce_cache: TTLCache = TTLCache(maxsize=10000, ttl=NONCE_CACHE_TTL)
     _nonce_lock: threading.Lock = threading.Lock()
+    _nonce_reuse_config: dict = {
+        "/publisher.v2.Publisher/RevokeAndDeleteOAuth2Token": {"ttl": 7, "max_uses": 2},
+        "/publisher.v2.Publisher/RevokeAndDeletePNBAToken": {"ttl": 7, "max_uses": 2},
+    }
 
     @classmethod
     def _get_entity_lock(cls, entity_id: str) -> threading.Lock:
@@ -61,6 +67,43 @@ class EntityInternalServiceV2(vault_pb2_grpc.EntityInternalServicer):
         """Get the nonce lock for thread-safe nonce cache access."""
         return cls._nonce_lock
 
+    @classmethod
+    def _check_and_update_nonce(cls, nonce: str, method_name: str) -> tuple[bool, str]:
+        """
+        Check if nonce can be used and update usage count.
+        Returns (can_use, error_message).
+        """
+        current_time = time.time()
+
+        if nonce in cls._nonce_cache:
+            nonce_data = cls._nonce_cache[nonce]
+
+            if nonce_data["method_name"] != method_name:
+                return False, "Nonce already used for different method."
+
+            if nonce_data["reuse_expires_at"] <= current_time:
+                return False, "Nonce has already been used."
+
+            config = cls._nonce_reuse_config.get(method_name, {})
+            max_uses = config.get("max_uses", 1)
+
+            if nonce_data["use_count"] >= max_uses:
+                return False, "Nonce has already been used."
+
+            nonce_data["use_count"] += 1
+            return True, ""
+
+        config = cls._nonce_reuse_config.get(method_name, {})
+        reuse_ttl = config.get("ttl", NONCE_CACHE_TTL)
+
+        cls._nonce_cache[nonce] = {
+            "method_name": method_name,
+            "use_count": 1,
+            "reuse_expires_at": current_time + reuse_ttl,
+        }
+
+        return True, ""
+
     def handle_create_grpc_error_response(
         self, context, response, error, status_code, **kwargs
     ):
@@ -74,10 +117,10 @@ class EntityInternalServiceV2(vault_pb2_grpc.EntityInternalServicer):
 
         if error_type == "UNKNOWN":
             traceback.print_exception(type(error), error, error.__traceback__)
+        else:
+            logger.error(str(error))
 
         error_message = f"{error_prefix}: {user_msg}" if error_prefix else user_msg
-
-        logger.error(error_message)
 
         context.set_details(error_message)
         context.set_code(status_code)
@@ -252,9 +295,9 @@ class EntityInternalServiceV2(vault_pb2_grpc.EntityInternalServicer):
                 )
 
             with self._get_nonce_lock():
-                if nonce in self._nonce_cache:
-                    return None, create_error_response("Nonce has already been used.")
-                self._nonce_cache[nonce] = True
+                can_use, error_msg = self._check_and_update_nonce(nonce, method_name)
+                if not can_use:
+                    return None, create_error_response(error_msg)
 
             nonce_bytes = base64.urlsafe_b64decode(nonce)
             signature_bytes = base64.urlsafe_b64decode(signature)
@@ -308,3 +351,5 @@ class EntityInternalServiceV2(vault_pb2_grpc.EntityInternalServicer):
 
     DecryptPayload = DecryptPayload
     StoreEntityToken = StoreEntityToken
+    GetEntityAccessToken = GetEntityAccessToken
+    DeleteEntityToken = DeleteEntityToken
