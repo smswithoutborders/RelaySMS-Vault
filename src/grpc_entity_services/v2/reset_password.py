@@ -8,19 +8,12 @@ import grpc
 
 from base_logger import get_logger
 from protos.v2 import vault_pb2
-from src import stats
+from src.db_models import Entity, EntityDraft, Stats, database
 from src.device_id import derive_device_id_v1
-from src.entity import find_entity
 from src.long_lived_token import derive_llt_v1
 from src.password_validation import validate_password_strength
 from src.recaptcha import is_captcha_enabled
-from src.types import (
-    ContactType,
-    EntityOrigin,
-    OTPAction,
-    StatsEventStage,
-    StatsEventType,
-)
+from src.types import ContactType, OTPAction, StatsEventStage, StatsEventType
 from src.utils import (
     clear_keystore,
     create_x25519_keypair,
@@ -44,7 +37,32 @@ def ResetPassword(self, request, context):
     if hasattr(request, "phone_number"):
         request.phone_number = self.clean_phone_number(request.phone_number)
 
-    def initiate_reset(entity_obj):
+    def initiate_reset():
+        invalid_fields = self.handle_request_field_validation(
+            context,
+            request,
+            response,
+            [
+                "new_password",
+                "client_id_pub_key",
+                "client_ratchet_pub_key",
+                "client_header_pub_key",
+                "client_next_header_pub_key",
+                "client_nonce",
+            ],
+        )
+        if invalid_fields:
+            return invalid_fields
+
+        invalid_password = validate_password_strength(request.new_password)
+        if invalid_password:
+            return self.handle_create_grpc_error_response(
+                context,
+                response,
+                invalid_password,
+                grpc.StatusCode.INVALID_ARGUMENT,
+            )
+
         if is_captcha_enabled():
             logger.debug("Captcha verification is enabled.")
 
@@ -62,15 +80,36 @@ def ResetPassword(self, request, context):
 
         message, expires = pow_response
 
+        password_hash = hash_password(request.new_password)
+
+        fields = {
+            "eid": entity_obj.eid,
+            "password_hash": password_hash,
+            "country_code": entity_obj.country_code,
+            "client_id_pub_key": request.client_id_pub_key,
+            "client_ratchet_pub_key": request.client_ratchet_pub_key,
+            "client_header_pub_key": request.client_header_pub_key,
+            "client_next_header_pub_key": request.client_next_header_pub_key,
+            "client_nonce": encrypt_data(request.client_nonce),
+            "purpose": StatsEventType.RESET_PASSWORD.value,
+        }
+
+        if identifier_type == ContactType.EMAIL:
+            fields["email_hash"] = hash_value
+        elif identifier_type == ContactType.PHONE:
+            fields["phone_number_hash"] = hash_value
+
         country_code = decode_and_decrypt(entity_obj.country_code)
 
-        stats.create(
-            event_type=StatsEventType.RESET_PASSWORD,
-            country_code=country_code,
-            identifier_type=identifier_type,
-            origin=EntityOrigin(entity_obj.origin),
-            event_stage=StatsEventStage.INITIATE,
-        )
+        with database.atomic():
+            EntityDraft.replace(**fields).execute()
+            Stats.create(
+                event_type=StatsEventType.RESET_PASSWORD.value,
+                country_code=country_code,
+                identifier_type=identifier_type.value,
+                origin=entity_obj.origin,
+                event_stage=StatsEventStage.INITIATE.value,
+            )
 
         return response(
             requires_ownership_proof=True,
@@ -78,17 +117,39 @@ def ResetPassword(self, request, context):
             next_attempt_timestamp=expires,
         )
 
-    def complete_reset(entity_obj):
+    def complete_reset():
         success, pow_response = self.handle_pow_verification(
             context, request, response, OTPAction.RESET_PASSWORD
         )
         if not success:
             return pow_response
 
+        entity_draft_obj = (
+            EntityDraft.get_or_none(email_hash=hash_value)
+            if identifier_type == ContactType.EMAIL
+            else EntityDraft.get_or_none(phone_number_hash=hash_value)
+        )
+
+        if not entity_draft_obj:
+            return self.handle_create_grpc_error_response(
+                context,
+                response,
+                "Invalid request. Please initiate password reset first.",
+                grpc.StatusCode.FAILED_PRECONDITION,
+            )
+
+        if not entity_draft_obj.purpose == StatsEventType.RESET_PASSWORD.value:
+            return self.handle_create_grpc_error_response(
+                context,
+                response,
+                "Invalid request. Entity draft purpose mismatch.",
+                grpc.StatusCode.FAILED_PRECONDITION,
+            )
+
         eid = entity_obj.eid.hex
-        password_hash = hash_password(request.new_password)
 
         clear_keystore(eid)
+
         identity_key_success, server_identity_response = self.get_server_identity_key(
             context, response
         )
@@ -113,43 +174,48 @@ def ResetPassword(self, request, context):
 
         long_lived_token = derive_llt_v1(payload=payload, signing_key=signature_key)
 
-        entity_obj.password_hash = password_hash
+        entity_obj.password_hash = entity_draft_obj.password_hash
         entity_obj.server_state = None
         entity_obj.device_id = derive_device_id_v1(
-            client_id_pub_key=request.client_id_pub_key
+            client_id_pub_key=entity_draft_obj.client_id_pub_key
         ).hex()
-        entity_obj.client_id_pub_key = request.client_id_pub_key
-        entity_obj.client_ratchet_pub_key = request.client_ratchet_pub_key
-        entity_obj.client_header_pub_key = request.client_header_pub_key
-        entity_obj.client_next_header_pub_key = request.client_next_header_pub_key
-        entity_obj.client_nonce = encrypt_data(request.client_nonce)
+        entity_obj.client_id_pub_key = entity_draft_obj.client_id_pub_key
+        entity_obj.client_ratchet_pub_key = entity_draft_obj.client_ratchet_pub_key
+        entity_obj.client_header_pub_key = entity_draft_obj.client_header_pub_key
+        entity_obj.client_next_header_pub_key = (
+            entity_draft_obj.client_next_header_pub_key
+        )
+        entity_obj.client_nonce = entity_draft_obj.client_nonce
         entity_obj.server_ratchet_keypair = serialize_and_encrypt(
             server_ratchet_keypair
         )
         entity_obj.server_nonce = encrypt_data(server_nonce)
-        entity_obj.save(
-            only=[
-                "password_hash",
-                "server_state",
-                "device_id",
-                "client_id_pub_key",
-                "client_ratchet_pub_key",
-                "client_header_pub_key",
-                "client_next_header_pub_key",
-                "client_nonce",
-                "server_ratchet_keypair",
-                "server_nonce",
-            ]
-        )
 
         country_code = decode_and_decrypt(entity_obj.country_code)
-        stats.create(
-            event_type=StatsEventType.RESET_PASSWORD,
-            country_code=country_code,
-            identifier_type=identifier_type,
-            origin=EntityOrigin(entity_obj.origin),
-            event_stage=StatsEventStage.COMPLETE,
-        )
+
+        with database.atomic():
+            entity_obj.save(
+                only=[
+                    "password_hash",
+                    "server_state",
+                    "device_id",
+                    "client_id_pub_key",
+                    "client_ratchet_pub_key",
+                    "client_header_pub_key",
+                    "client_next_header_pub_key",
+                    "client_nonce",
+                    "server_ratchet_keypair",
+                    "server_nonce",
+                ]
+            )
+            entity_draft_obj.delete_instance()
+            Stats.create(
+                event_type=StatsEventType.RESET_PASSWORD.value,
+                country_code=country_code,
+                identifier_type=identifier_type.value,
+                origin=entity_obj.origin,
+                event_stage=StatsEventStage.COMPLETE.value,
+            )
 
         return response(
             long_lived_token=long_lived_token,
@@ -162,54 +228,28 @@ def ResetPassword(self, request, context):
             server_nonce=server_nonce,
         )
 
-    def validate_fields():
+    try:
         invalid_fields = self.handle_request_field_validation(
             context,
             request,
             response,
-            [
-                ("phone_number", "email_address"),
-                "new_password",
-                "client_id_pub_key",
-                "client_ratchet_pub_key",
-                "client_header_pub_key",
-                "client_next_header_pub_key",
-                "client_nonce",
-            ],
+            [("phone_number", "email_address")],
         )
         if invalid_fields:
             return invalid_fields
 
-        invalid_password = validate_password_strength(request.new_password)
-        if invalid_password:
-            return self.handle_create_grpc_error_response(
-                context,
-                response,
-                invalid_password,
-                grpc.StatusCode.INVALID_ARGUMENT,
+        identifier_type, identifier_value = self.get_identifier(request)
+        hash_value = hash_data(identifier_value)
+
+        entity_lock = self._get_entity_lock(hash_value)
+        with entity_lock:
+            entity_obj = (
+                Entity.get_or_none(email_hash=hash_value)
+                if identifier_type == ContactType.EMAIL
+                else Entity.get_or_none(phone_number_hash=hash_value)
             )
 
-        return None
-
-    try:
-        invalid_fields_response = validate_fields()
-        if invalid_fields_response:
-            return invalid_fields_response
-
-        identifier_type, identifier_value = self.get_identifier(request)
-
-        entity_lock = self._get_entity_lock(identifier_value)
-        with entity_lock:
-            if identifier_type == ContactType.EMAIL:
-                email_address = identifier_value
-                email_address_hash = hash_data(email_address)
-                entity_obj = find_entity(email_hash=email_address_hash)
-            else:
-                phone_number = identifier_value
-                phone_number_hash = hash_data(phone_number)
-                entity_obj = find_entity(phone_number_hash=phone_number_hash)
-
-            if not entity_obj or not entity_obj.is_verified:
+            if not entity_obj:
                 return self.handle_create_grpc_error_response(
                     context,
                     response,
@@ -218,9 +258,9 @@ def ResetPassword(self, request, context):
                 )
 
             if request.ownership_proof_response:
-                return complete_reset(entity_obj)
+                return complete_reset()
 
-            return initiate_reset(entity_obj)
+            return initiate_reset()
 
     except Exception as e:
         return self.handle_create_grpc_error_response(

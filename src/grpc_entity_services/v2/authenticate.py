@@ -8,9 +8,8 @@ import grpc
 
 from base_logger import get_logger
 from protos.v2 import vault_pb2
-from src import stats
+from src.db_models import Entity, EntityDraft, Stats, database
 from src.device_id import derive_device_id_v1
-from src.entity import find_entity
 from src.long_lived_token import derive_llt_v1
 from src.password_rate_limit import (
     clear_rate_limit,
@@ -18,13 +17,7 @@ from src.password_rate_limit import (
     register_password_attempt,
 )
 from src.recaptcha import is_captcha_enabled
-from src.types import (
-    ContactType,
-    EntityOrigin,
-    OTPAction,
-    StatsEventStage,
-    StatsEventType,
-)
+from src.types import ContactType, OTPAction, StatsEventStage, StatsEventType
 from src.utils import (
     clear_keystore,
     create_x25519_keypair,
@@ -49,7 +42,7 @@ def AuthenticateEntity(self, request, context):
     if hasattr(request, "phone_number"):
         request.phone_number = self.clean_phone_number(request.phone_number)
 
-    def initiate_authentication(entity_obj):
+    def initiate_authentication():
         invalid_fields = self.handle_request_field_validation(
             context,
             request,
@@ -122,35 +115,34 @@ def AuthenticateEntity(self, request, context):
             return pow_response
 
         message, expires = pow_response
-        entity_obj.device_id = None
-        entity_obj.server_state = None
-        entity_obj.client_id_pub_key = request.client_id_pub_key
-        entity_obj.client_ratchet_pub_key = request.client_ratchet_pub_key
-        entity_obj.client_header_pub_key = request.client_header_pub_key
-        entity_obj.client_next_header_pub_key = request.client_next_header_pub_key
-        entity_obj.client_nonce = encrypt_data(request.client_nonce)
-        entity_obj.save(
-            only=[
-                "device_id",
-                "server_state",
-                "client_id_pub_key",
-                "client_ratchet_pub_key",
-                "client_header_pub_key",
-                "client_next_header_pub_key",
-                "client_nonce",
-            ]
-        )
+
+        fields = {
+            "eid": entity_obj.eid,
+            "client_id_pub_key": request.client_id_pub_key,
+            "client_ratchet_pub_key": request.client_ratchet_pub_key,
+            "client_header_pub_key": request.client_header_pub_key,
+            "client_next_header_pub_key": request.client_next_header_pub_key,
+            "client_nonce": encrypt_data(request.client_nonce),
+            "purpose": StatsEventType.AUTH.value,
+        }
+
+        if identifier_type == ContactType.EMAIL:
+            fields["email_hash"] = hash_value
+        elif identifier_type == ContactType.PHONE:
+            fields["phone_number_hash"] = hash_value
 
         country_code = decode_and_decrypt(entity_obj.country_code)
         origin = entity_obj.origin
 
-        stats.create(
-            event_type=StatsEventType.AUTH,
-            country_code=country_code,
-            identifier_type=identifier_type,
-            origin=EntityOrigin(origin),
-            event_stage=StatsEventStage.INITIATE,
-        )
+        with database.atomic():
+            EntityDraft.replace(**fields).execute()
+            Stats.create(
+                event_type=StatsEventType.AUTH.value,
+                country_code=country_code,
+                identifier_type=identifier_type.value,
+                origin=origin,
+                event_stage=StatsEventStage.INITIATE.value,
+            )
 
         return response(
             requires_ownership_proof=True,
@@ -158,16 +150,39 @@ def AuthenticateEntity(self, request, context):
             next_attempt_timestamp=expires,
         )
 
-    def complete_authentication(entity_obj):
+    def complete_authentication():
         success, pow_response = self.handle_pow_verification(
             context, request, response, OTPAction.AUTH
         )
         if not success:
             return pow_response
 
+        entity_draft_obj = (
+            EntityDraft.get_or_none(email_hash=hash_value)
+            if identifier_type == ContactType.EMAIL
+            else EntityDraft.get_or_none(phone_number_hash=hash_value)
+        )
+
+        if not entity_draft_obj:
+            return self.handle_create_grpc_error_response(
+                context,
+                response,
+                "Invalid request. Please initiate authentication first.",
+                grpc.StatusCode.FAILED_PRECONDITION,
+            )
+
+        if not entity_draft_obj.purpose == StatsEventType.AUTH.value:
+            return self.handle_create_grpc_error_response(
+                context,
+                response,
+                "Invalid request. Entity draft purpose mismatch.",
+                grpc.StatusCode.FAILED_PRECONDITION,
+            )
+
         eid = entity_obj.eid.hex
 
         clear_keystore(eid)
+
         identity_key_success, server_identity_response = self.get_server_identity_key(
             context, response
         )
@@ -192,25 +207,47 @@ def AuthenticateEntity(self, request, context):
 
         long_lived_token = derive_llt_v1(payload=payload, signing_key=signature_key)
 
+        entity_obj.device_id = derive_device_id_v1(
+            client_id_pub_key=entity_draft_obj.client_id_pub_key
+        ).hex()
+        entity_obj.server_state = None
+        entity_obj.client_id_pub_key = entity_draft_obj.client_id_pub_key
+        entity_obj.client_ratchet_pub_key = entity_draft_obj.client_ratchet_pub_key
+        entity_obj.client_header_pub_key = entity_draft_obj.client_header_pub_key
+        entity_obj.client_next_header_pub_key = (
+            entity_draft_obj.client_next_header_pub_key
+        )
+        entity_obj.client_nonce = entity_draft_obj.client_nonce
         entity_obj.server_ratchet_keypair = serialize_and_encrypt(
             server_ratchet_keypair
         )
         entity_obj.server_nonce = encrypt_data(server_nonce)
-        entity_obj.device_id = derive_device_id_v1(
-            client_id_pub_key=entity_obj.client_id_pub_key
-        ).hex()
-        entity_obj.save(only=["server_ratchet_keypair", "server_nonce", "device_id"])
 
         country_code = decode_and_decrypt(entity_obj.country_code)
         origin = entity_obj.origin
 
-        stats.create(
-            event_type=StatsEventType.AUTH,
-            country_code=country_code,
-            identifier_type=identifier_type,
-            origin=EntityOrigin(origin),
-            event_stage=StatsEventStage.COMPLETE,
-        )
+        with database.atomic():
+            entity_obj.save(
+                only=[
+                    "device_id",
+                    "server_state",
+                    "client_id_pub_key",
+                    "client_ratchet_pub_key",
+                    "client_header_pub_key",
+                    "client_next_header_pub_key",
+                    "client_nonce",
+                    "server_ratchet_keypair",
+                    "server_nonce",
+                ]
+            )
+            entity_draft_obj.delete_instance()
+            Stats.create(
+                event_type=StatsEventType.AUTH.value,
+                country_code=country_code,
+                identifier_type=identifier_type.value,
+                origin=origin,
+                event_stage=StatsEventStage.COMPLETE.value,
+            )
 
         return response(
             long_lived_token=long_lived_token,
@@ -234,19 +271,17 @@ def AuthenticateEntity(self, request, context):
             return invalid_fields
 
         identifier_type, identifier_value = self.get_identifier(request)
+        hash_value = hash_data(identifier_value)
 
-        entity_lock = self._get_entity_lock(identifier_value)
+        entity_lock = self._get_entity_lock(hash_value)
         with entity_lock:
-            if identifier_type == ContactType.EMAIL:
-                email_address = identifier_value
-                email_address_hash = hash_data(email_address)
-                entity_obj = find_entity(email_hash=email_address_hash)
-            else:
-                phone_number = identifier_value
-                phone_number_hash = hash_data(phone_number)
-                entity_obj = find_entity(phone_number_hash=phone_number_hash)
+            entity_obj = (
+                Entity.get_or_none(email_hash=hash_value)
+                if identifier_type == ContactType.EMAIL
+                else Entity.get_or_none(phone_number_hash=hash_value)
+            )
 
-            if not entity_obj or not entity_obj.is_verified:
+            if not entity_obj:
                 return self.handle_create_grpc_error_response(
                     context,
                     response,
@@ -255,9 +290,9 @@ def AuthenticateEntity(self, request, context):
                 )
 
             if request.ownership_proof_response:
-                return complete_authentication(entity_obj)
+                return complete_authentication()
 
-            return initiate_authentication(entity_obj)
+            return initiate_authentication()
 
     except Exception as e:
         return self.handle_create_grpc_error_response(

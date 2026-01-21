@@ -44,7 +44,6 @@ class Entity(Model):
     publish_keypair = BlobField(null=True)
     device_id_keypair = BlobField(null=True)
     server_state = BlobField(null=True)
-    is_verified = BooleanField(default=True)
     is_bridge_enabled = BooleanField(default=True)
     origin = CharField(null=True, default="web", constraints=[SQL("DEFAULT 'web'")])
     language = CharField(null=True, default="en", constraints=[SQL("DEFAULT 'en'")])
@@ -60,6 +59,51 @@ class Entity(Model):
             (("device_id",), True),
             (("email_hash",), True),
         )
+
+
+class EntityDraft(Model):
+    """Model representing Entity Drafts Table."""
+
+    eid = UUIDField(primary_key=True)
+    phone_number_hash = CharField(null=True)
+    email_hash = CharField(null=True)
+    password_hash = CharField(null=True)
+    country_code = CharField(null=True)
+    client_id_pub_key = BlobField(null=True)
+    client_ratchet_pub_key = BlobField(null=True)
+    client_header_pub_key = BlobField(null=True)
+    client_next_header_pub_key = BlobField(null=True)
+    client_nonce = BlobField(null=True)
+    purpose = CharField(max_length=50)
+    date_created = DateTimeField(default=datetime.datetime.now)
+
+    class Meta:
+        """Meta class to define database connection."""
+
+        database = database
+        table_name = "entity_drafts"
+        indexes = (
+            (("phone_number_hash",), True),
+            (("email_hash",), True),
+        )
+
+    def create_entity_from_draft(self):
+        """Create an entity from the draft."""
+        entity_data = {
+            "eid": self.eid,
+            "phone_number_hash": self.phone_number_hash,
+            "email_hash": self.email_hash,
+            "password_hash": self.password_hash,
+            "country_code": self.country_code,
+            "client_id_pub_key": self.client_id_pub_key,
+            "client_ratchet_pub_key": self.client_ratchet_pub_key,
+            "client_header_pub_key": self.client_header_pub_key,
+            "client_next_header_pub_key": self.client_next_header_pub_key,
+            "client_nonce": self.client_nonce,
+        }
+        with database.atomic():
+            entity = Entity.create(**entity_data)
+        return entity
 
 
 class OTPRateLimit(Model):
@@ -290,5 +334,14 @@ class StaticKeypairs(Model):
 
 if get_configs("MODE", default_value="development") in ("production", "development"):
     create_tables(
-        [Entity, OTPRateLimit, Token, PasswordRateLimit, OTP, Stats, StaticKeypairs]
+        [
+            Entity,
+            EntityDraft,
+            OTPRateLimit,
+            Token,
+            PasswordRateLimit,
+            OTP,
+            Stats,
+            StaticKeypairs,
+        ]
     )

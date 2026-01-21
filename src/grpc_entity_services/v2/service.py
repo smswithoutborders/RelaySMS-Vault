@@ -1,7 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-only
 """gRPC Entity Service V2"""
 
-import base64
 import re
 import threading
 import time
@@ -31,7 +30,6 @@ from src.types import ContactType
 from src.utils import (
     decrypt_and_deserialize,
     get_configs,
-    hash_data,
     is_valid_x25519_public_key,
     load_and_decode_key,
 )
@@ -55,14 +53,13 @@ class EntityServiceV2(vault_pb2_grpc.EntityServicer):
 
     @classmethod
     def _get_entity_lock(cls, identifier: str) -> threading.Lock:
-        """Get or create a lock for a specific entity using hashed identifier."""
-        identifier_hash = hash_data(identifier)
+        """Get or create a lock for an entity."""
         with cls._locks_lock:
-            lock = cls._entity_locks.get(identifier_hash)
+            lock = cls._entity_locks.get(identifier)
             if lock is None:
                 lock = threading.Lock()
-                cls._entity_locks[identifier_hash] = lock
-                logger.debug("Created new lock for hashed identifier")
+                cls._entity_locks[identifier] = lock
+                logger.debug("New entity lock created.")
             return lock
 
     @classmethod
@@ -290,8 +287,8 @@ class EntityServiceV2(vault_pb2_grpc.EntityServicer):
 
             result = {
                 "llt": authorization[7:],
-                "signature": metadata.get("x-sig"),
-                "nonce": metadata.get("x-nonce"),
+                "signature": metadata.get("x-sig-bin"),
+                "nonce": metadata.get("x-nonce-bin"),
                 "timestamp": metadata.get("x-timestamp"),
                 "method_name": metadata.get("x-method-name") or context.method_name,
             }
@@ -357,15 +354,11 @@ class EntityServiceV2(vault_pb2_grpc.EntityServicer):
                     return None, create_error_response("Nonce has already been used.")
                 self._nonce_cache[nonce] = True
 
-            nonce_bytes = base64.urlsafe_b64decode(nonce)
-            signature_bytes = base64.urlsafe_b64decode(signature)
-            request_string_bytes = (
-                method_name.encode() + timestamp.encode() + nonce_bytes
-            )
+            request_string_bytes = method_name.encode() + timestamp.encode() + nonce
             client_id_pub_key = Ed25519PublicKey.from_public_bytes(
                 entity_obj.client_id_pub_key
             )
-            client_id_pub_key.verify(signature_bytes, request_string_bytes)
+            client_id_pub_key.verify(signature, request_string_bytes)
 
             return entity_obj, None
 

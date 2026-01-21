@@ -1,7 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-only
 """gRPC Entity Internal Service V2"""
 
-import base64
 import re
 import threading
 import time
@@ -232,8 +231,8 @@ class EntityInternalServiceV2(vault_pb2_grpc.EntityInternalServicer):
 
             result = {
                 "llt": authorization[7:],
-                "signature": metadata.get("x-sig"),
-                "nonce": metadata.get("x-nonce"),
+                "signature": metadata.get("x-sig-bin"),
+                "nonce": metadata.get("x-nonce-bin"),
                 "timestamp": metadata.get("x-timestamp"),
                 "method_name": metadata.get("x-method-name") or context.method_name,
             }
@@ -299,15 +298,11 @@ class EntityInternalServiceV2(vault_pb2_grpc.EntityInternalServicer):
                 if not can_use:
                     return None, create_error_response(error_msg)
 
-            nonce_bytes = base64.urlsafe_b64decode(nonce)
-            signature_bytes = base64.urlsafe_b64decode(signature)
-            request_string_bytes = (
-                method_name.encode() + timestamp.encode() + nonce_bytes
-            )
+            request_string_bytes = method_name.encode() + timestamp.encode() + nonce
             client_id_pub_key = Ed25519PublicKey.from_public_bytes(
                 entity_obj.client_id_pub_key
             )
-            client_id_pub_key.verify(signature_bytes, request_string_bytes)
+            client_id_pub_key.verify(signature, request_string_bytes)
 
             return entity_obj, None
 

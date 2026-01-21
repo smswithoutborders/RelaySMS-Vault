@@ -438,17 +438,11 @@ EOF
 
 **Request:** `ResetPasswordRequest`
 
-| Field                      | Type   | Required | Description                                    |
-| ------------------------   | ------ | -------- | -------------------------------                |
-| phone_number               | string | Optional | Phone number in E164 format                    |
-| email_address              | string | Optional | Email address                                  |
-| new_password               | string | Yes      | New secure password                            |
-| ownership_proof_response   | string | Yes      | OTP code from step 1                           |
-| client_id_pub_key          | bytes  | Yes      | Client identification public key               |
-| client_ratchet_pub_key     | bytes  | Yes      | Client ratchet public key                      |
-| client_header_pub_key      | bytes  | Yes      | Client header public key                       |
-| client_next_header_pub_key | bytes  | Yes      | Client next header public key                  |
-| client_nonce               | bytes  | Yes      | Client nonce                                   |
+| Field                    | Type   | Required | Description                     |
+| ------------------------ | ------ | -------- | ------------------------------- |
+| phone_number             | string | Optional | Phone number in E164 format     |
+| email_address            | string | Optional | Email address                   |
+| ownership_proof_response | string | Yes      | OTP code from step 1            |
 
 **Response:** `ResetPasswordResponse`
 
@@ -469,14 +463,7 @@ grpcurl -plaintext -d @ -proto protos/v2/vault.proto \
 {
   "phone_number": "+237123456789",
   "email_address": "user@example.com",
-  "new_password": "NewSecurePass123!",
-  "ownership_proof_response": "123456",
-  "captcha_token": "captcha_token_value",
-  "client_id_pub_key": "...",
-  "client_ratchet_pub_key": "...",
-  "client_header_pub_key": "...",
-  "client_next_header_pub_key": "...",
-  "client_nonce": "..."
+  "ownership_proof_response": "123456"
 }
 EOF
 ```
