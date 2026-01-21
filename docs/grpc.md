@@ -308,8 +308,8 @@ Retrieves all stored tokens for an authenticated entity.
 | Header        | Type   | Required | Description                                                  |
 | ------------- | ------ | -------- | ------------------------------------------------------------ |
 | authorization | string | Yes      | Bearer token (format: `Bearer <long_lived_token>`)           |
-| x-sig         | string | Yes      | Request signature (base64 url-safe encoded)                  |
-| x-nonce       | string | Yes      | Nonce for request (must be unique, base64 url-safe encoded)  |
+| x-sig-bin     | bytes  | Yes      | Request signature (binary)                                   |
+| x-nonce-bin   | bytes  | Yes      | Nonce for request (must be unique, binary)                   |
 | x-timestamp   | string | Yes      | Request timestamp                                            |
 
 **Response:** `ListEntityStoredTokensResponse`
@@ -333,8 +333,8 @@ Retrieves all stored tokens for an authenticated entity.
 ```bash
 grpcurl -plaintext \
 -H 'authorization: Bearer your_long_lived_token' \
--H 'x-sig: your_signature_base64_urlsafe' \
--H 'x-nonce: unique_nonce_base64_urlsafe' \
+-H 'x-sig-bin: <binary_signature>' \
+-H 'x-nonce-bin: <binary_nonce>' \
 -H 'x-timestamp: timestamp' \
 -d '{"migrate_to_device": false}' \
 -proto protos/v2/vault.proto \
@@ -361,8 +361,8 @@ Deletes an entity from the vault.
 | Header        | Type   | Required | Description                                                  |
 | ------------- | ------ | -------- | ------------------------------------------------------------ |
 | authorization | string | Yes      | Bearer token (format: `Bearer <long_lived_token>`)           |
-| x-sig         | string | Yes      | Request signature (base64 url-safe encoded)                  |
-| x-nonce       | string | Yes      | Nonce for request (must be unique, base64 url-safe encoded)  |
+| x-sig-bin     | bytes  | Yes      | Request signature (binary)                                   |
+| x-nonce-bin   | bytes  | Yes      | Nonce for request (must be unique, binary)                   |
 | x-timestamp   | string | Yes      | Request timestamp                                            |
 
 **Response:** `DeleteEntityResponse`
@@ -377,8 +377,8 @@ Deletes an entity from the vault.
 ```bash
 grpcurl -plaintext \
 -H 'authorization: Bearer your_long_lived_token' \
--H 'x-sig: your_signature_base64_urlsafe' \
--H 'x-nonce: unique_nonce_base64_urlsafe' \
+-H 'x-sig-bin: <binary_signature>' \
+-H 'x-nonce-bin: <binary_nonce>' \
 -H 'x-timestamp: timestamp' \
 -d '{}' \
 -proto protos/v2/vault.proto \
@@ -490,8 +490,8 @@ Updates an entity's password.
 | Header        | Type   | Required | Description                                                  |
 | ------------- | ------ | -------- | ------------------------------------------------------------ |
 | authorization | string | Yes      | Bearer token (format: `Bearer <long_lived_token>`)           |
-| x-sig         | string | Yes      | Request signature (base64 url-safe encoded)                  |
-| x-nonce       | string | Yes      | Nonce for request (must be unique, base64 url-safe encoded)  |
+| x-sig-bin     | bytes  | Yes      | Request signature (binary)                                   |
+| x-nonce-bin   | bytes  | Yes      | Nonce for request (must be unique, binary)                   |
 | x-timestamp   | string | Yes      | Request timestamp                                            |
 
 **Response:** `UpdateEntityPasswordResponse`
@@ -506,8 +506,8 @@ Updates an entity's password.
 ```bash
 grpcurl -plaintext \
 -H 'authorization: Bearer your_long_lived_token' \
--H 'x-sig: your_signature_base64_urlsafe' \
--H 'x-nonce: unique_nonce_base64_urlsafe' \
+-H 'x-sig-bin: <binary_signature>' \
+-H 'x-nonce-bin: <binary_nonce>' \
 -H 'x-timestamp: timestamp' \
 -d @ -proto protos/v2/vault.proto \
 <your_host>:<your_port> vault.v2.Entity/UpdateEntityPassword <<EOF
@@ -545,8 +545,8 @@ Stores an OAuth2 token for an authenticated entity.
 | Header        | Type   | Required | Description                                                  |
 | ------------- | ------ | -------- | ------------------------------------------------------------ |
 | authorization | string | Yes      | Bearer token (format: `Bearer <long_lived_token>`)           |
-| x-sig         | string | Yes      | Request signature (base64 url-safe encoded)                  |
-| x-nonce       | string | Yes      | Nonce for request (must be unique, base64 url-safe encoded)  |
+| x-sig-bin     | bytes  | Yes      | Request signature (binary)                                   |
+| x-nonce-bin   | bytes  | Yes      | Nonce for request (must be unique, binary)                   |
 | x-timestamp   | string | Yes      | Request timestamp                                            |
 
 **Response:** `StoreEntityTokenResponse`
@@ -561,8 +561,8 @@ Stores an OAuth2 token for an authenticated entity.
 ```bash
 grpcurl -plaintext \
 -H 'authorization: Bearer your_long_lived_token' \
--H 'x-sig: your_signature_base64_urlsafe' \
--H 'x-nonce: unique_nonce_base64_urlsafe' \
+-H 'x-sig-bin: <binary_signature>' \
+-H 'x-nonce-bin: <binary_nonce>' \
 -H 'x-timestamp: timestamp' \
 -d @ -proto protos/v2/vault.proto \
 <your_host>:<your_port> vault.v2.EntityInternal/StoreEntityToken <<EOF
@@ -602,8 +602,8 @@ Retrieves an entity's access token for a specific platform.
 | Header        | Type   | Required | Description                                                  |
 | ------------- | ------ | -------- | ------------------------------------------------------------ |
 | authorization | string | Yes      | Bearer token (format: `Bearer <long_lived_token>`)           |
-| x-sig         | string | Yes      | Request signature (base64 url-safe encoded)                  |
-| x-nonce       | string | Yes      | Nonce for request (must be unique, base64 url-safe encoded)  |
+| x-sig-bin     | bytes  | Yes      | Request signature (binary)                                   |
+| x-nonce-bin   | bytes  | Yes      | Nonce for request (must be unique, binary)                   |
 | x-timestamp   | string | Yes      | Request timestamp                                            |
 
 **Response:** `GetEntityAccessTokenResponse`
@@ -619,8 +619,8 @@ Retrieves an entity's access token for a specific platform.
 ```bash
 grpcurl -plaintext \
 -H 'authorization: Bearer your_long_lived_token' \
--H 'x-sig: your_signature_base64_urlsafe' \
--H 'x-nonce: unique_nonce_base64_urlsafe' \
+-H 'x-sig-bin: <binary_signature>' \
+-H 'x-nonce-bin: <binary_nonce>' \
 -H 'x-timestamp: timestamp' \
 -d @ -proto protos/v2/vault.proto \
 <your_host>:<your_port> vault.v2.EntityInternal/GetEntityAccessToken <<EOF
@@ -653,8 +653,8 @@ Deletes an entity's stored token for a specific platform.
 | Header        | Type   | Required | Description                                                  |
 | ------------- | ------ | -------- | ------------------------------------------------------------ |
 | authorization | string | Yes      | Bearer token (format: `Bearer <long_lived_token>`)           |
-| x-sig         | string | Yes      | Request signature (base64 url-safe encoded)                  |
-| x-nonce       | string | Yes      | Nonce for request (must be unique, base64 url-safe encoded)  |
+| x-sig-bin     | bytes  | Yes      | Request signature (binary)                                   |
+| x-nonce-bin   | bytes  | Yes      | Nonce for request (must be unique, binary)                   |
 | x-timestamp   | string | Yes      | Request timestamp                                            |
 
 **Response:** `DeleteEntityTokenResponse`
@@ -669,8 +669,8 @@ Deletes an entity's stored token for a specific platform.
 ```bash
 grpcurl -plaintext \
 -H 'authorization: Bearer your_long_lived_token' \
--H 'x-sig: your_signature_base64_urlsafe' \
--H 'x-nonce: unique_nonce_base64_urlsafe' \
+-H 'x-sig-bin: <binary_signature>' \
+-H 'x-nonce-bin: <binary_nonce>' \
 -H 'x-timestamp: timestamp' \
 -d @ -proto protos/v2/vault.proto \
 <your_host>:<your_port> vault.v2.EntityInternal/DeleteEntityToken <<EOF
