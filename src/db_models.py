@@ -106,26 +106,6 @@ class EntityDraft(Model):
         return entity
 
 
-class OTPRateLimit(Model):
-    """Model representing OTP Rate Limits Table."""
-
-    phone_number = CharField(null=True)
-    email = CharField(null=True)
-    attempt_count = IntegerField(default=0)
-    date_expires = DateTimeField(null=True)
-    date_created = DateTimeField(default=datetime.datetime.now)
-
-    class Meta:
-        """Meta class to define database connection."""
-
-        database = database
-        table_name = "otp_rate_limit"
-        indexes = (
-            (("phone_number",), True),
-            (("email",), True),
-        )
-
-
 class Token(Model):
     """Model representing Tokens Table."""
 
@@ -162,40 +142,46 @@ class PasswordRateLimit(Model):
 
 
 class OTP(Model):
-    """Model representing OTP Table."""
+    """Model representing OTPs table."""
 
-    phone_number = CharField(null=True)
-    email = CharField(null=True)
-    otp_code = CharField(max_length=10, null=True)
-    purpose = CharField(max_length=50, null=True)
+    identifier = CharField(unique=True)
+    otp_hash = CharField(null=True)
     attempt_count = IntegerField(default=0)
-    date_expires = DateTimeField()
-    date_created = DateTimeField(default=datetime.datetime.now)
+    purpose = CharField()
+    expires_at = DateTimeField(null=True)
+    created_at = DateTimeField(default=datetime.datetime.now)
 
     class Meta:
         """Meta class to define database connection."""
 
         database = database
         table_name = "otp"
-        indexes = (
-            (("phone_number",), True),
-            (("email",), True),
-            (("date_expires",), False),
-        )
+        indexes = ((("expires_at",), False),)
 
     def is_expired(self):
         """Check if the OTP is expired."""
-        return datetime.datetime.now() > self.date_expires
-
-    def reset_attempt_count(self):
-        """Reset the attempt count for the OTP."""
-        self.attempt_count = 0
-        self.save(only=["attempt_count"])
+        now = datetime.datetime.now()
+        return now > self.expires_at
 
     def increment_attempt_count(self):
         """Increment the attempt count for the OTP."""
         self.attempt_count += 1
         self.save(only=["attempt_count"])
+
+
+class OTPRateLimit(Model):
+    """Model representing OTP Rate Limits Table."""
+
+    identifier = CharField(unique=True)
+    attempt_count = IntegerField(default=0)
+    expires_at = DateTimeField(null=True)
+    created_at = DateTimeField(default=datetime.datetime.now)
+
+    class Meta:
+        """Meta class to define database connection."""
+
+        database = database
+        table_name = "otp_rate_limit"
 
 
 # TODO: Remove Signups model after migration to Stats is complete

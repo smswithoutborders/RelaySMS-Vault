@@ -20,7 +20,7 @@ from src.grpc_entity_services.v1.list_tokens import ListEntityStoredTokens
 from src.grpc_entity_services.v1.reset_password import ResetPassword
 from src.grpc_entity_services.v1.update_password import UpdateEntityPassword
 from src.long_lived_token import verify_llt
-from src.otp_service import send_otp, verify_otp
+from src.otp_service import OTPService
 from src.recaptcha import verify_captcha
 from src.types import ContactType
 from src.utils import decrypt_and_deserialize, hash_data, is_valid_x25519_public_key

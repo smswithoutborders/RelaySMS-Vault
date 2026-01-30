@@ -24,7 +24,7 @@ from src.grpc_entity_services.v2.list_tokens import ListEntityStoredTokens
 from src.grpc_entity_services.v2.reset_password import ResetPassword
 from src.grpc_entity_services.v2.update_password import UpdateEntityPassword
 from src.long_lived_token import verify_llt_v1
-from src.otp_service import send_otp, verify_otp
+from src.otp_service import OTPService
 from src.recaptcha import verify_captcha
 from src.types import ContactType
 from src.utils import (
@@ -213,8 +213,9 @@ class EntityServiceV2(vault_pb2_grpc.EntityServicer):
     def handle_pow_verification(self, context, request, response, action):
         """Handle proof of ownership verification."""
         identifier_type, identifier_value = self.get_identifier(request)
-        success, message = verify_otp(
-            identifier_value, request.ownership_proof_response, action, identifier_type
+        otp_service = OTPService(contact_type=identifier_type, action=action)
+        success, message = otp_service.verify(
+            identifier_value, request.ownership_proof_response
         )
         if not success:
             return success, self.handle_create_grpc_error_response(
@@ -228,15 +229,18 @@ class EntityServiceV2(vault_pb2_grpc.EntityServicer):
     def handle_pow_initialization(self, context, request, response, action):
         """Handle proof of ownership initialization."""
         identifier_type, identifier_value = self.get_identifier(request)
-        success, message, expires = send_otp(identifier_value, action, identifier_type)
-        if not success:
-            return success, self.handle_create_grpc_error_response(
+        otp_service = OTPService(contact_type=identifier_type, action=action)
+        result, error = otp_service.send(identifier_value)
+        if error:
+            return False, self.handle_create_grpc_error_response(
                 context,
                 response,
-                message,
+                error,
                 grpc.StatusCode.INVALID_ARGUMENT,
             )
-        return success, (message, expires)
+        message = "OTP sent successfully. Please check for the code."
+        expires = result.get("rate_limit_expires_at")
+        return True, (message, expires)
 
     def handle_captcha_verification(self, context, request, response):
         """Handle captcha verification for entity operations."""
