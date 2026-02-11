@@ -52,6 +52,11 @@ def DecryptPayload(self, request, context):
 
     def decrypt_message(entity_obj, header, content_ciphertext):
         server_identity_keypair = decrypt_and_deserialize(entity_obj.publish_keypair)
+        client_ratchet_pub_key = (
+            base64.b64decode(entity_obj.client_publish_pub_key)
+            if entity_obj.client_publish_pub_key
+            else None
+        )
 
         decrypted_state = (
             decrypt_data(entity_obj.server_state) if entity_obj.server_state else None
@@ -61,7 +66,9 @@ def DecryptPayload(self, request, context):
             encrypted_content=content_ciphertext,
             ratchet_header=header,
             server_state=decrypted_state,
+            client_ratchet_pub_key=client_ratchet_pub_key,
             server_identity_keypair=server_identity_keypair,
+            associated_data=server_identity_keypair.get_public_key(),
         )
 
         if decrypt_error:
