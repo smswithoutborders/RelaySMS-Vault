@@ -14,7 +14,7 @@ nest-asyncio==1.6.0
 peewee==3.19.0
 phonenumbers==9.0.24
 pycryptodome==3.23.0
-PyJWT==2.11.0
+jwt==1.4.0
 pytest==9.0.2
 requests==2.32.5
 smswithoutborders_libsig @ git+https://github.com/smswithoutborders/lib_signal_double_ratchet_python.git@v0.2.0
