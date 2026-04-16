@@ -1,0 +1,17 @@
+[Unit]
+Description=RelaySMS Vault gRPC Internal Service
+After=network.target
+PartOf=relaysms-vault.service
+
+[Service]
+User=relaysms
+Group=relaysms
+WorkingDirectory=/opt/relaysms/relaysms-vault
+EnvironmentFile=/opt/relaysms/relaysms-vault/.env
+ExecStart=/opt/relaysms/relaysms-vault/venv/bin/python -u grpc_internal_server.py
+Restart=always
+SyslogIdentifier=relaysms-vault-grpc-internal
+ReadWritePaths=/opt/relaysms/relaysms-vault/data
+
+[Install]
+WantedBy=relaysms-vault.service

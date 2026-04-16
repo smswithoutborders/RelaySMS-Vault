@@ -8,19 +8,70 @@ RelaySMS Vault is the security core of the RelaySMS ecosystem, responsible for:
 
 ## Table of Contents
 
-1. [Quick Start](#quick-start)
-2. [System Requirements](#system-requirements)
-3. [Installation](#installation)
+1. [System Requirements](#system-requirements)
+2. [Installation](#installation)
+3. [Quick Start](#quick-start)
 4. [Configuration](#configuration)
 5. [References](#references)
 6. [Contributing](#contributing)
 7. [License](#license)
 
-## Quick Start
+## System Requirements
 
-> [!NOTE]
->
-> Ensure all [system dependencies](#system-requirements) are installed before running setup scripts.
+- **Database:** MySQL (≥ 8.0.28), MariaDB, or SQLite
+- **Python:** ≥ 3.8.10
+- **Virtual Environments:** Python venv
+
+### Ubuntu Dependencies
+
+```bash
+sudo apt update
+sudo apt install python3-dev libmysqlclient-dev apache2 apache2-dev make libapache2-mod-wsgi-py3
+```
+
+## Installation
+
+### Production Installation
+
+Quick install with curl:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/smswithoutborders/RelaySMS-Vault/main/install.sh | sudo bash
+```
+
+Or with wget:
+
+```bash
+wget -qO- https://raw.githubusercontent.com/smswithoutborders/RelaySMS-Vault/main/install.sh | sudo bash
+```
+
+Specify branch:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/smswithoutborders/RelaySMS-Vault/main/install.sh | sudo BRANCH=staging bash
+```
+
+#### Manage Services
+
+```bash
+cd /opt/relaysms/relaysms-vault
+sudo ./manage.sh start
+sudo ./manage.sh stop
+./manage.sh status
+./manage.sh logs
+```
+
+#### Configuration
+
+Edit `/opt/relaysms/relaysms-vault/.env` and restart:
+
+```bash
+sudo ./manage.sh restart
+```
+
+For detailed manual installation steps, see [INSTALL.md](INSTALL.md).
+
+### Development Installation
 
 For development, use the provided scripts:
 
@@ -44,60 +95,7 @@ source scripts/quick-setup.sh && ./scripts/quick-start.sh
   - Launches the gRPC server, internal gRPC server, and REST server
 
 > [!WARNING]
->
 > This setup is for development only. Do not use in production.
-
-## System Requirements
-
-- **Database:** MySQL (≥ 8.0.28), MariaDB, or SQLite
-- **Python:** ≥ 3.8.10
-- **Virtual Environments:** Python venv
-
-### Ubuntu Dependencies
-
-```bash
-sudo apt update
-sudo apt install python3-dev libmysqlclient-dev apache2 apache2-dev make libapache2-mod-wsgi-py3
-```
-
-## Installation
-
-1. **Create and activate a virtual environment:**
-
-   ```bash
-   python3 -m venv venv
-   source venv/bin/activate
-   ```
-
-2. **Install dependencies:**
-
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-3. **Compile gRPC protos:**
-
-   ```bash
-   make grpc-compile
-   ```
-
-4. **Download supported platforms JSON:**
-
-   ```bash
-   make download-platforms
-   ```
-
-5. **Create a dummy user (for development/testing):**
-
-   ```bash
-   make create-dummy-user
-   ```
-
-6. **Generate static x25519 keys:**
-
-   ```bash
-   make generate-static-keys
-   ```
 
 ## Building and Running with Docker
 
@@ -114,7 +112,12 @@ docker build --target development -t relaysms-vault:dev .
 #### Prepare Environment Files
 
 ```bash
-cp template.env .env && head -c 32 /dev/urandom | base64 > encryption.key && head -c 32 /dev/urandom | base64 > hashing.key
+cp template.env .env && \
+mkdir -p keys data && \
+openssl rand -base64 32 > keys/encryption.key && \
+openssl rand -base64 32 > keys/hashing.key && \
+openssl rand -base64 32 > keys/pepper.key && \
+openssl rand -base64 32 > keys/signing.key
 ```
 
 > Edit `.env` as needed for your environment.
@@ -140,7 +143,7 @@ cp template.env .env && head -c 32 /dev/urandom | base64 > encryption.key && hea
 > ```
 
 ```bash
-docker run --rm --env-file .env -p 19000:19000 -p 8000:8000 -p 8443:8443 -v $(pwd)/keystore:/vault/keystore -v $(pwd)/encryption.key:/vault/encryption.key -v $(pwd)/hashing.key:/vault/hashing.key relaysms-vault:dev
+docker run --rm --env-file .env -p 19000:19000 -p 8000:8000 -p 8443:8443 -v $(pwd)/data:/vault/data -v $(pwd)/keys:/vault/keys relaysms-vault:dev
 ```
 
 > [!TIP]
@@ -148,13 +151,13 @@ docker run --rm --env-file .env -p 19000:19000 -p 8000:8000 -p 8443:8443 -v $(pw
 > - To run in detached mode:
 >
 >   ```bash
->   docker run -d --name relaysms-vault-dev --env-file .env -p 19000:19000 -p 8000:8000 -p 8443:8443 -v $(pwd)/keystore:/vault/keystore -v $(pwd)/encryption.key:/vault/encryption.key -v $(pwd)/hashing.key:/vault/hashing.key relaysms-vault:dev
+>   docker run -d --name relaysms-vault-dev --env-file .env -p 19000:19000 -p 8000:8000 -p 8443:8443 -v $(pwd)/data:/vault/data -v $(pwd)/keys:/vault/keys relaysms-vault:dev
 >   ```
 >
->   Then view logs with:
+> Then view logs with:
 >
->   ```bash
->   docker logs -f relaysms-vault-dev
+> ```bash
+> docker logs -f relaysms-vault-dev
 >   ```
 >
 > - REST API: `http://localhost:19000` or `https://localhost:19001`
@@ -176,7 +179,12 @@ docker build --target production -t relaysms-vault:prod .
 #### Prepare Environment Files
 
 ```bash
-cp template.env .env && head -c 32 /dev/urandom | base64 > encryption.key && head -c 32 /dev/urandom | base64 > hashing.key
+cp template.env .env && \
+mkdir -p keys data && \
+openssl rand -base64 32 > keys/encryption.key && \
+openssl rand -base64 32 > keys/hashing.key && \
+openssl rand -base64 32 > keys/pepper.key && \
+openssl rand -base64 32 > keys/signing.key
 ```
 
 > Edit `.env` as needed for your environment.
@@ -207,9 +215,8 @@ docker run --rm \
   -p 19000:19000 -p 19001:19001 \
   -p 8000:8000 -p 8001:8001 \
   -p 8443:8443 -p 8444:8444 \
-  -v $(pwd)/keystore:/vault/keystore \
-  -v $(pwd)/encryption.key:/vault/encryption.key \
-  -v $(pwd)/hashing.key:/vault/hashing.key \
+  -v $(pwd)/data:/vault/data \
+  -v $(pwd)/keys:/vault/keys \
   relaysms-vault:prod
 ```
 
@@ -224,16 +231,15 @@ docker run --rm \
 >     -p 19000:19000 -p 19001:19001 \
 >     -p 8000:8000 -p 8001:8001 \
 >     -p 8443:8443 -p 8444:8444 \
->     -v $(pwd)/keystore:/vault/keystore \
->     -v $(pwd)/encryption.key:/vault/encryption.key \
->     -v $(pwd)/hashing.key:/vault/hashing.key \
+>     -v $(pwd)/data:/vault/data \
+>     -v $(pwd)/keys:/vault/keys \
 >     relaysms-vault:prod
 >   ```
 >
->   Then view logs with:
+> Then view logs with:
 >
->   ```bash
->   docker logs -f relaysms-vault-prod
+> ```bash
+> docker logs -f relaysms-vault-prod
 >   ```
 >
 > - REST API: `https://localhost:19001`
@@ -281,8 +287,10 @@ export PORT=19000
 
 ### Security
 
-- `DATA_ENCRYPTION_KEY_PRIMARY_FILE`: Path to 32-byte encryption key (default: `encryption.key`)
-- `HMAC_KEY_FILE`: Path to 32-byte HMAC key (default: `hashing.key`)
+- `DATA_ENCRYPTION_KEY_PRIMARY_FILE`: Path to 32-byte encryption key (default: `keys/encryption.key`)
+- `HMAC_KEY_FILE`: Path to 32-byte HMAC key (default: `keys/hashing.key`)
+- `PEPPER_FILE`: Path to 32-byte pepper key (default: `keys/pepper.key`)
+- `SIGNATURE_KEY_FILE`: Path to 32-byte signing key (default: `keys/signing.key`)
 
 ### Database
 
@@ -290,7 +298,7 @@ export PORT=19000
 - `MYSQL_USER`: MySQL username
 - `MYSQL_PASSWORD`: MySQL password
 - `MYSQL_DATABASE`: MySQL database (default: `relaysms_vault`)
-- `SQLITE_DATABASE_PATH`: SQLite file path (default: `vault.db`)
+- `SQLITE_DATABASE_PATH`: SQLite file path (default: `data/vault.db`)
 
 ### Twilio
 
@@ -318,8 +326,8 @@ export PORT=19000
 
 ### Keystore
 
-- `KEYSTORE_PATH`: Keystore directory (default: `keystore`)
-- `STATIC_X25519_KEYSTORE_PATH`: Static X25519 keystore (default: `keystore/static_x25519`)
+- `KEYSTORE_PATH`: Keystore directory (default: `data/keystore`)
+- `STATIC_X25519_KEYSTORE_PATH`: Static X25519 keystore (default: `data/keystore/static_x25519`)
 
 ### Logging
 

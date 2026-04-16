@@ -1,0 +1,17 @@
+[Unit]
+Description=RelaySMS Vault REST API Service
+After=network.target
+PartOf=relaysms-vault.service
+
+[Service]
+User=relaysms
+Group=relaysms
+WorkingDirectory=/opt/relaysms/relaysms-vault
+EnvironmentFile=/opt/relaysms/relaysms-vault/.env
+ExecStart=/opt/relaysms/relaysms-vault/venv/bin/gunicorn -w 4 -b ${HOST}:${PORT} --log-level=info --access-logfile=- --threads 15 --timeout 30 app:app
+Restart=always
+SyslogIdentifier=relaysms-vault-rest
+ReadWritePaths=/opt/relaysms/relaysms-vault/data
+
+[Install]
+WantedBy=relaysms-vault.service
