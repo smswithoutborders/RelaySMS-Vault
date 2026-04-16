@@ -4,8 +4,7 @@ set -e
 
 INSTALL_DIR="/opt/relaysms/relaysms-vault"
 SERVICE_NAME="relaysms-vault"
-REPO_URL="https://github.com/smswithoutborders/RelaySMS-Vault.git"
-BRANCH="${BRANCH:-main}"
+REPO_URL="${REPO_URL:-https://github.com/smswithoutborders/RelaySMS-Vault.git}"
 USER="relaysms"
 GROUP="relaysms"
 
@@ -42,17 +41,17 @@ create_user() {
 }
 
 clone_repository() {
-  log "Cloning repository from $REPO_URL (branch: $BRANCH)"
+  log "Cloning repository from $REPO_URL"
 
   if [ -d "$INSTALL_DIR/.git" ]; then
     log "Repository already exists, updating"
     cd "$INSTALL_DIR"
     sudo -u "$USER" git fetch origin || error "Failed to fetch updates"
-    sudo -u "$USER" git checkout "$BRANCH" || error "Failed to checkout branch $BRANCH"
+    BRANCH=$(sudo -u "$USER" git rev-parse --abbrev-ref HEAD)
     sudo -u "$USER" git pull origin "$BRANCH" || error "Failed to pull updates"
   else
     mkdir -p "$(dirname "$INSTALL_DIR")"
-    sudo -u "$USER" git clone -b "$BRANCH" "$REPO_URL" "$INSTALL_DIR" || error "Failed to clone repository"
+    sudo -u "$USER" git clone "$REPO_URL" "$INSTALL_DIR" || error "Failed to clone repository"
   fi
 }
 

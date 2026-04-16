@@ -45,12 +45,6 @@ Or with wget:
 wget -qO- https://raw.githubusercontent.com/smswithoutborders/RelaySMS-Vault/main/install.sh | sudo bash
 ```
 
-Specify branch:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/smswithoutborders/RelaySMS-Vault/main/install.sh | sudo BRANCH=staging bash
-```
-
 #### Manage Services
 
 ```bash
