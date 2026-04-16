@@ -85,6 +85,25 @@ TWILIO_PHONE_NUMBER=your_twilio_phone_number
 
 Configure email OTP service. See [RelaySMS-Email-Service](https://github.com/smswithoutborders/RelaySMS-Email-Service) for setup and configuration details.
 
+```bash
+# Email Service Connection
+EMAIL_SERVICE_URL=https://your-email-service.example.com
+EMAIL_SERVICE_API_KEY=your_email_service_api_key
+
+# Email Template Configuration
+EMAIL_SUBJECT=Your verification code
+EMAIL_ORGANIZATION_NAME=SMSWithoutBorders
+EMAIL_WEBSITE_URL=https://relay.smswithoutborders.com
+EMAIL_LOGO_URL=https://your-domain.com/logo.png
+EMAIL_PROJECT_NAME=RelaySMS
+EMAIL_ABUSE_EMAIL=abuse@smswithoutborders.com
+EMAIL_SUPPORT_EMAIL=support@smswithoutborders.com
+
+# Email Delivery
+EMAIL_VERIFICATION_SENDER_ADDRESS=noreply@your-domain.com
+EMAIL_OTP_EXPIRY_MINUTES=10
+```
+
 ##### CAPTCHA Configuration
 
 Configure CAPTCHA verification using [RelaySMS-CAPTCHA-Server](https://github.com/smswithoutborders/RelaySMS-CAPTCHA-Server), which uses [librecaptcha](https://github.com/librecaptcha/lc-core):
