@@ -6,8 +6,6 @@ INSTALL_DIR="/opt/relaysms/relaysms-vault"
 SERVICE_NAME="relaysms-vault"
 REPO_URL="https://github.com/smswithoutborders/RelaySMS-Vault.git"
 BRANCH="${BRANCH:-main}"
-USER="${SUDO_USER:-$(whoami)}"
-GROUP="$(id -gn $USER)"
 
 log() { echo "[$(date +'%Y-%m-%d %H:%M:%S')] $1"; }
 error() {
@@ -32,7 +30,6 @@ clone_repository() {
   else
     mkdir -p "$(dirname "$INSTALL_DIR")"
     git clone -b "$BRANCH" "$REPO_URL" "$INSTALL_DIR" || error "Failed to clone"
-    chown -R "$USER:$GROUP" "$INSTALL_DIR"
   fi
 }
 
@@ -67,7 +64,6 @@ generate_keys() {
   for key in encryption hashing pepper signing; do
     [ -f "keys/$key.key" ] || openssl rand -base64 32 >"keys/$key.key"
   done
-  chown -R "$USER:$GROUP" keys
   chmod 700 keys
   chmod 600 keys/*.key
 }
@@ -83,17 +79,13 @@ install_systemd_service() {
   log "Installing systemd services"
   for service in relaysms-vault.target relaysms-vault-rest.service relaysms-vault-grpc.service relaysms-vault-grpc-internal.service; do
     [ -f "$service" ] || error "Service file $service not found"
-    envsubst <"$service" >/etc/systemd/system/$service || error "Failed to install $service"
+    cp "$service" /etc/systemd/system/$service || error "Failed to install $service"
   done
   systemctl daemon-reload && systemctl enable "$SERVICE_NAME.target" || error "Failed to enable services"
 }
 
 set_permissions() {
   log "Setting permissions"
-  chown -R "$USER:$GROUP" "$INSTALL_DIR"
-  chmod -R 750 "$INSTALL_DIR"
-  chmod 700 keys 2>/dev/null || true
-  chmod 600 keys/*.key 2>/dev/null || true
   chmod 600 .env 2>/dev/null || true
 }
 

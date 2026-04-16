@@ -30,7 +30,7 @@ status)
   systemctl status relaysms-vault-rest relaysms-vault-grpc relaysms-vault-grpc-internal
   ;;
 logs)
-  journalctl -u 'relaysms-vault*' -f
+  journalctl -u relaysms-vault-rest -u relaysms-vault-grpc -u relaysms-vault-grpc-internal -f
   ;;
 enable)
   check_sudo
