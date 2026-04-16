@@ -1,7 +1,7 @@
 [Unit]
 Description=RelaySMS Vault REST API Service
 After=network.target
-PartOf=relaysms-vault.service
+PartOf=relaysms-vault.target
 
 [Service]
 User=relaysms
@@ -14,4 +14,4 @@ SyslogIdentifier=relaysms-vault-rest
 ReadWritePaths=/opt/relaysms/relaysms-vault/data
 
 [Install]
-WantedBy=relaysms-vault.service
+WantedBy=relaysms-vault.target

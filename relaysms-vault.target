@@ -1,7 +1,7 @@
 [Unit]
-Description=RelaySMS Vault Service
-After=network.target
+Description=RelaySMS Vault Services
 Wants=relaysms-vault-rest.service relaysms-vault-grpc.service relaysms-vault-grpc-internal.service
+After=relaysms-vault-rest.service relaysms-vault-grpc.service relaysms-vault-grpc-internal.service
 
 [Install]
 WantedBy=multi-user.target
