@@ -81,7 +81,9 @@ install_systemd_service() {
     [ -f "$service" ] || error "Service file $service not found"
     cp "$service" /etc/systemd/system/$service || error "Failed to install $service"
   done
-  systemctl daemon-reload && systemctl enable "$SERVICE_NAME.target" || error "Failed to enable services"
+  systemctl daemon-reload || error "Failed to reload systemd"
+  systemctl enable "$SERVICE_NAME.target" || error "Failed to enable services"
+  systemctl start "$SERVICE_NAME.target" || error "Failed to start services"
 }
 
 set_permissions() {
@@ -109,8 +111,10 @@ main() {
   install_systemd_service
 
   log "Installation complete"
-  log "Manage services: $INSTALL_DIR/manage.sh {start|stop|restart|status|logs}"
-  log "Configuration: $INSTALL_DIR/.env"
+  log ""
+  log "Services started and enabled"
+  log "Manage: $INSTALL_DIR/manage.sh {start|stop|restart|status|logs}"
+  log "Config: $INSTALL_DIR/.env"
 }
 
 main "$@"

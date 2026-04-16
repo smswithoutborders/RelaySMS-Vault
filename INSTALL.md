@@ -84,6 +84,7 @@ make runtime-setup
 sudo cp relaysms-vault.target relaysms-vault-*.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable relaysms-vault.target
+sudo systemctl start relaysms-vault.target
 ```
 
 ## Service Management
