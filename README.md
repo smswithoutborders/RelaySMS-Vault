@@ -45,6 +45,8 @@ Or with wget:
 wget -qO- https://raw.githubusercontent.com/smswithoutborders/RelaySMS-Vault/main/install.sh | sudo bash
 ```
 
+For detailed manual installation steps, see [INSTALL.md](INSTALL.md).
+
 #### Manage Services
 
 ```bash
@@ -60,7 +62,38 @@ Edit `/opt/relaysms/relaysms-vault/.env` and restart:
 sudo ./manage.sh restart
 ```
 
-For detailed manual installation steps, see [INSTALL.md](INSTALL.md).
+##### Disable Mock OTP
+
+For production, disable mock OTP to actually send OTP to users:
+
+```bash
+MOCK_OTP=false
+```
+
+##### Twilio Configuration
+
+Configure Twilio to send SMS OTP. Get your credentials from [Twilio Console](https://www.twilio.com/console):
+
+```bash
+TWILIO_ACCOUNT_SID=your_account_sid
+TWILIO_AUTH_TOKEN=your_auth_token
+TWILIO_SERVICE_SID=your_service_sid
+TWILIO_PHONE_NUMBER=your_twilio_phone_number
+```
+
+##### Email Service
+
+Configure email OTP service. See [RelaySMS-Email-Service](https://github.com/smswithoutborders/RelaySMS-Email-Service) for setup and configuration details.
+
+##### CAPTCHA Configuration
+
+Configure CAPTCHA verification using [RelaySMS-CAPTCHA-Server](https://github.com/smswithoutborders/RelaySMS-CAPTCHA-Server), which uses [librecaptcha](https://github.com/librecaptcha/lc-core):
+
+```bash
+CAPTCHA_ENABLED=true
+CAPTCHA_SERVER_URL=your_captcha_server_url
+CAPTCHA_SECRET_KEY=your_captcha_secret_key
+```
 
 ### Development Installation
 
