@@ -49,10 +49,7 @@ wget -qO- https://raw.githubusercontent.com/smswithoutborders/RelaySMS-Vault/mai
 
 ```bash
 cd /opt/relaysms/relaysms-vault
-sudo ./manage.sh start
-sudo ./manage.sh stop
-./manage.sh status
-./manage.sh logs
+./manage.sh {start|stop|restart|status|logs|update}
 ```
 
 #### Configuration

@@ -4,8 +4,8 @@ After=network.target
 PartOf=relaysms-vault.target
 
 [Service]
-User=relaysms
-Group=relaysms
+User=${USER}
+Group=${GROUP}
 WorkingDirectory=/opt/relaysms/relaysms-vault
 EnvironmentFile=/opt/relaysms/relaysms-vault/.env
 ExecStart=/opt/relaysms/relaysms-vault/venv/bin/python -u grpc_internal_server.py
