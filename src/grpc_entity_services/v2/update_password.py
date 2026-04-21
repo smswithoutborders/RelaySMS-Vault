@@ -82,8 +82,6 @@ def UpdateEntityPassword(self, request, context):
         entity_obj.device_id = None
         entity_obj.client_id_pub_key = None
         entity_obj.client_ratchet_pub_key = None
-        entity_obj.client_header_pub_key = None
-        entity_obj.client_next_header_pub_key = None
         entity_obj.client_nonce = None
         entity_obj.server_ratchet_keypair = None
         entity_obj.server_nonce = None
@@ -94,8 +92,6 @@ def UpdateEntityPassword(self, request, context):
                 "device_id",
                 "client_id_pub_key",
                 "client_ratchet_pub_key",
-                "client_header_pub_key",
-                "client_next_header_pub_key",
                 "client_nonce",
                 "server_ratchet_keypair",
                 "server_nonce",

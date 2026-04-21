@@ -94,12 +94,7 @@ class EntityServiceV2(vault_pb2_grpc.EntityServicer):
         self, context, request, response, required_fields
     ):
         """Validates the fields in the gRPC request."""
-        x25519_fields = {
-            "client_id_pub_key",
-            "client_ratchet_pub_key",
-            "client_header_pub_key",
-            "client_next_header_pub_key",
-        }
+        x25519_fields = {"client_id_pub_key", "client_ratchet_pub_key"}
         nonce_fields = {"client_nonce"}
 
         def field_missing_error(field_names):

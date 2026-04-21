@@ -84,8 +84,6 @@ def DecryptPayload(self, request, context):
                 server_ratchet_keypair=server_ratchet_keypair,
                 server_nonce=server_nonce,
                 client_ratchet_pub_key=entity_obj.client_ratchet_pub_key,
-                client_header_pub_key=entity_obj.client_header_pub_key,
-                client_next_header_pub_key=entity_obj.client_next_header_pub_key,
                 client_nonce=client_nonce,
                 client_id_pub_key=entity_obj.client_id_pub_key,
                 use_header_encryption=use_header_encryption,
@@ -118,8 +116,6 @@ def DecryptPayload(self, request, context):
 
         if is_v2_entity and was_initialized:
             entity_obj.client_ratchet_pub_key = None
-            entity_obj.client_header_pub_key = None
-            entity_obj.client_next_header_pub_key = None
             entity_obj.client_nonce = None
             entity_obj.server_ratchet_keypair = None
             entity_obj.server_nonce = None
@@ -129,8 +125,6 @@ def DecryptPayload(self, request, context):
                     "server_ratchet_keypair",
                     "server_nonce",
                     "client_ratchet_pub_key",
-                    "client_header_pub_key",
-                    "client_next_header_pub_key",
                     "client_nonce",
                 ]
             )

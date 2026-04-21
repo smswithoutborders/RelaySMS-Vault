@@ -137,8 +137,6 @@ Creates a new entity with two-step ownership verification.
 | captcha_token              | string | Yes*     | Captcha verification token (*if captcha enabled)  |
 | client_id_pub_key          | bytes  | Yes      | Client identification public key                  |
 | client_ratchet_pub_key     | bytes  | Yes      | Client ratchet public key                         |
-| client_header_pub_key      | bytes  | Yes      | Client header public key                          |
-| client_next_header_pub_key | bytes  | Yes      | Client next header public key                     |
 | client_nonce               | bytes  | Yes      | Client nonce                                      |
 
 **Response:** `CreateEntityResponse`
@@ -162,8 +160,6 @@ grpcurl -plaintext -d @ -proto protos/v2/vault.proto \
   "captcha_token": "captcha_token_value",
   "client_id_pub_key": "...",
   "client_ratchet_pub_key": "...",
-  "client_header_pub_key": "...",
-  "client_next_header_pub_key": "...",
   "client_nonce": "..."
 }
 EOF
@@ -185,8 +181,6 @@ EOF
 | -------------------------- | ------ | ------------------------------ |
 | long_lived_token           | string | Session token                  |
 | server_ratchet_pub_key     | bytes  | Server ratchet public key      |
-| server_header_pub_key      | bytes  | Server header public key       |
-| server_next_header_pub_key | bytes  | Server next header public key  |
 | server_nonce               | bytes  | Server nonce                   |
 | message                    | string | Response message               |
 
@@ -221,8 +215,6 @@ Authenticates an existing entity with two-step verification.
 | captcha_token              | string | Yes*     | Captcha verification token (*if captcha enabled)|
 | client_id_pub_key          | bytes  | Yes      | Client identification public key                |
 | client_ratchet_pub_key     | bytes  | Yes      | Client ratchet public key                       |
-| client_header_pub_key      | bytes  | Yes      | Client header public key                        |
-| client_next_header_pub_key | bytes  | Yes      | Client next header public key                   |
 | client_nonce               | bytes  | Yes      | Client nonce                                    |
 
 **Response:** `AuthenticateEntityResponse`
@@ -246,8 +238,6 @@ grpcurl -plaintext -d @ -proto protos/v2/vault.proto \
   "captcha_token": "captcha_token_value",
   "client_id_pub_key": "...",
   "client_ratchet_pub_key": "...",
-  "client_header_pub_key": "...",
-  "client_next_header_pub_key": "...",
   "client_nonce": "..."
 }
 EOF
@@ -269,8 +259,6 @@ EOF
 | -------------------------- | ------ | ----------------------------- |
 | long_lived_token           | string | Session token                 |
 | server_ratchet_pub_key     | bytes  | Server ratchet public key     |
-| server_header_pub_key      | bytes  | Server header public key      |
-| server_next_header_pub_key | bytes  | Server next header public key |
 | server_nonce               | bytes  | Server nonce                  |
 | message                    | string | Response message              |
 
@@ -403,8 +391,6 @@ Resets an entity's password with two-step verification.
 | captcha_token              | string | Yes*     | Captcha verification token (*if captcha enabled)|
 | client_id_pub_key          | bytes  | Yes      | Client identification public key                |
 | client_ratchet_pub_key     | bytes  | Yes      | Client ratchet public key                       |
-| client_header_pub_key      | bytes  | Yes      | Client header public key                        |
-| client_next_header_pub_key | bytes  | Yes      | Client next header public key                   |
 | client_nonce               | bytes  | Yes      | Client nonce                                    |
 
 **Response:** `ResetPasswordResponse`
@@ -427,8 +413,6 @@ grpcurl -plaintext -d @ -proto protos/v2/vault.proto \
   "captcha_token": "captcha_token_value",
   "client_id_pub_key": "...",
   "client_ratchet_pub_key": "...",
-  "client_header_pub_key": "...",
-  "client_next_header_pub_key": "...",
   "client_nonce": "..."
 }
 EOF
@@ -450,8 +434,6 @@ EOF
 | -------------------------- | ------ | --------------------------------- |
 | long_lived_token           | string | Session token                     |
 | server_ratchet_pub_key     | bytes  | Server ratchet public key         |
-| server_header_pub_key      | bytes  | Server header public key          |
-| server_next_header_pub_key | bytes  | Server next header public key     |
 | server_nonce               | bytes  | Server nonce                      |
 | message                    | string | Response message                  |
 

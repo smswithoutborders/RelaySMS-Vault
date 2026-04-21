@@ -34,8 +34,6 @@ class Entity(Model):
     device_id = CharField(null=True)
     client_id_pub_key = BlobField(null=True)
     client_ratchet_pub_key = BlobField(null=True)
-    client_header_pub_key = BlobField(null=True)
-    client_next_header_pub_key = BlobField(null=True)
     client_nonce = BlobField(null=True)
     server_ratchet_keypair = BlobField(null=True)
     server_nonce = BlobField(null=True)
@@ -71,8 +69,6 @@ class EntityDraft(Model):
     country_code = CharField(null=True)
     client_id_pub_key = BlobField(null=True)
     client_ratchet_pub_key = BlobField(null=True)
-    client_header_pub_key = BlobField(null=True)
-    client_next_header_pub_key = BlobField(null=True)
     client_nonce = BlobField(null=True)
     purpose = CharField(max_length=50)
     date_created = DateTimeField(default=datetime.datetime.now)
@@ -97,8 +93,6 @@ class EntityDraft(Model):
             "country_code": self.country_code,
             "client_id_pub_key": self.client_id_pub_key,
             "client_ratchet_pub_key": self.client_ratchet_pub_key,
-            "client_header_pub_key": self.client_header_pub_key,
-            "client_next_header_pub_key": self.client_next_header_pub_key,
             "client_nonce": self.client_nonce,
         }
         with database.atomic():

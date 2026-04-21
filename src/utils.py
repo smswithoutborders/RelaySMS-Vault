@@ -289,46 +289,31 @@ def generate_eid(
 
 
 def create_x25519_keypair(
-    eid: str, keystore_name: str, encrypt_headers: bool = False
-) -> Tuple[x25519, Dict[str, Optional[bytes]]]:
+    eid: str, keystore_name: str, use_header_encryption: bool = False
+) -> Tuple[x25519, bytes]:
     """Create and initialize an X25519 keypair.
 
     Args:
         eid (str): Unique entity identifier.
         keystore_name (str): Keystore file name.
-        encrypt_headers (bool): Whether to generate header-related keypairs.
+        use_header_encryption (bool): If True, initialize with header encryption support.
 
     Returns:
-        Tuple[x25519, Dict[str, Optional[bytes]]]: A tuple containing:
+        Tuple[x25519, bytes]: A tuple containing:
             - The X25519 keypair object.
-            - A dictionary of public keys with the following keys:
-                - public_key: The X25519 public key bytes.
-                - header_public_key: The X25519 header public key bytes, or ``None``
-                  if headers are not encrypted.
-                - next_header_public_key: The X25519 next header public key bytes,
-                  or ``None`` if headers are not encrypted.
+            - public_key: The X25519 public key bytes (ratchet_pk if header encryption enabled).
     """
     keystore_path = get_configs("KEYSTORE_PATH")
     file_path = os.path.join(keystore_path, f"{eid}_{keystore_name}.db")
 
     x25519_keypair = x25519(file_path)
 
-    public_keys: Dict[str, Optional[bytes]] = {
-        "public_key": None,
-        "header_public_key": None,
-        "next_header_public_key": None,
-    }
-
-    if encrypt_headers:
-        (
-            public_keys["public_key"],
-            public_keys["header_public_key"],
-            public_keys["next_header_public_key"],
-        ) = x25519_keypair.initHE()
+    if use_header_encryption:
+        public_key, _, _ = x25519_keypair.initHE()
     else:
-        public_keys["public_key"] = x25519_keypair.init()
+        public_key = x25519_keypair.init()
 
-    return x25519_keypair, public_keys
+    return x25519_keypair, public_key
 
 
 def deserialize_keypair(keypair: bytes) -> Any:

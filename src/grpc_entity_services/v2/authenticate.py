@@ -51,8 +51,6 @@ def AuthenticateEntity(self, request, context):
                 "password",
                 "client_id_pub_key",
                 "client_ratchet_pub_key",
-                "client_header_pub_key",
-                "client_next_header_pub_key",
                 "client_nonce",
             ],
         )
@@ -120,8 +118,6 @@ def AuthenticateEntity(self, request, context):
             "eid": entity_obj.eid,
             "client_id_pub_key": request.client_id_pub_key,
             "client_ratchet_pub_key": request.client_ratchet_pub_key,
-            "client_header_pub_key": request.client_header_pub_key,
-            "client_next_header_pub_key": request.client_next_header_pub_key,
             "client_nonce": encrypt_data(request.client_nonce),
             "purpose": StatsEventType.AUTH.value,
         }
@@ -189,8 +185,8 @@ def AuthenticateEntity(self, request, context):
         if not identity_key_success:
             return server_identity_response
 
-        server_ratchet_keypair, server_ratchet_pub_keys = create_x25519_keypair(
-            eid, "ratchet", encrypt_headers=True
+        server_ratchet_keypair, server_ratchet_pub_key = create_x25519_keypair(
+            eid, "ratchet", use_header_encryption=True
         )
         server_nonce = secrets.token_bytes(16)
 
@@ -213,10 +209,6 @@ def AuthenticateEntity(self, request, context):
         entity_obj.server_state = None
         entity_obj.client_id_pub_key = entity_draft_obj.client_id_pub_key
         entity_obj.client_ratchet_pub_key = entity_draft_obj.client_ratchet_pub_key
-        entity_obj.client_header_pub_key = entity_draft_obj.client_header_pub_key
-        entity_obj.client_next_header_pub_key = (
-            entity_draft_obj.client_next_header_pub_key
-        )
         entity_obj.client_nonce = entity_draft_obj.client_nonce
         entity_obj.server_ratchet_keypair = serialize_and_encrypt(
             server_ratchet_keypair
@@ -233,8 +225,6 @@ def AuthenticateEntity(self, request, context):
                     "server_state",
                     "client_id_pub_key",
                     "client_ratchet_pub_key",
-                    "client_header_pub_key",
-                    "client_next_header_pub_key",
                     "client_nonce",
                     "server_ratchet_keypair",
                     "server_nonce",
@@ -252,11 +242,7 @@ def AuthenticateEntity(self, request, context):
         return response(
             long_lived_token=long_lived_token,
             message="Entity authenticated successfully",
-            server_ratchet_pub_key=server_ratchet_pub_keys["public_key"],
-            server_header_pub_key=server_ratchet_pub_keys["header_public_key"],
-            server_next_header_pub_key=server_ratchet_pub_keys[
-                "next_header_public_key"
-            ],
+            server_ratchet_pub_key=server_ratchet_pub_key,
             server_nonce=server_nonce,
         )
 

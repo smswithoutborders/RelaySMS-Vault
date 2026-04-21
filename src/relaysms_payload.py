@@ -3,9 +3,9 @@ Module for handling encryption, decryption, encoding, and decoding of RelaySMS p
 """
 
 import base64
-import hashlib
 import struct
 
+from smswithoutborders_libsig.helpers import generate_associated_data_client
 from smswithoutborders_libsig.keypairs import x25519
 from smswithoutborders_libsig.ratchets import HEADERS, Ratchets, States
 from smswithoutborders_libsig.ratchetsHE import RatchetsHE
@@ -21,8 +21,6 @@ def _initialize_ratchet_state(
     client_nonce: bytes,
     server_nonce: bytes,
     server_ratchet_keypair=None,
-    client_header_pub_key=None,
-    client_next_header_pub_key=None,
 ):
     """
     Initialize ratchet state for Bob (server).
@@ -33,8 +31,6 @@ def _initialize_ratchet_state(
         client_nonce (bytes): Client nonce.
         server_nonce (bytes): Server nonce.
         server_ratchet_keypair (x25519, optional): Server ratchet keypair.
-        client_header_pub_key (bytes, optional): Client's header public key.
-        client_next_header_pub_key (bytes, optional): Client's next header public key.
 
     Returns:
         tuple: (state, root_key, header_key, next_header_key) or (state, root_key, None, None)
@@ -44,20 +40,17 @@ def _initialize_ratchet_state(
         server_identity_keypair.pnt_keystore, server_identity_keypair.secret_key
     )
     if not server_ratchet_keypair:
-        logger.debug("Generating root key with standard agree ...")
+        logger.debug("Deriving Root Key ...")
         root_key = server_identity_keypair.agree(client_ratchet_pub_key)
         return state, root_key, None, None
 
-    logger.debug("Generating root key with authenticated agree and nonces...")
+    logger.debug("Deriving RK0, HK, NHK with Noise NK ...")
     root_key, header_key, next_header_key = (
-        server_ratchet_keypair.agreeWithAuthAndNonce(
-            auth_private_key=server_identity_private,
-            auth_public_key=None,
-            header_public_key=client_header_pub_key,
-            next_header_public_key=client_next_header_pub_key,
-            public_key=client_ratchet_pub_key,
-            nonce1=client_nonce,
-            nonce2=server_nonce,
+        server_ratchet_keypair.agreeWithNoiseNKPattern(
+            client_nonce=client_nonce,
+            server_nonce=server_nonce,
+            eC_pk=client_ratchet_pub_key,
+            SI=server_identity_private,
         )
     )
     return state, root_key, header_key, next_header_key
@@ -123,19 +116,6 @@ def _decrypt_with_header_encrypted_ratchet(
     return plaintext
 
 
-def _generate_associated_data(
-    client_id_pub_key: bytes,
-    server_identity_pub_key: bytes,
-    message: str = "RelaySMS AD v1",
-) -> bytes:
-    """Generate associated data."""
-    h = hashlib.sha256()
-    h.update(message.encode("utf-8"))
-    h.update(client_id_pub_key)
-    h.update(server_identity_pub_key)
-    return h.digest()
-
-
 def decrypt_payload(
     encrypted_content: bytes,
     ratchet_header: bytes,
@@ -144,8 +124,6 @@ def decrypt_payload(
     server_ratchet_keypair=None,
     server_nonce=None,
     client_ratchet_pub_key=None,
-    client_header_pub_key=None,
-    client_next_header_pub_key=None,
     client_nonce=None,
     client_id_pub_key=None,
     associated_data=None,
@@ -162,8 +140,6 @@ def decrypt_payload(
         server_ratchet_keypair (x25519, optional): Server ratchet keypair.
         server_nonce (bytes, optional): Server nonce.
         client_ratchet_pub_key (bytes, optional): Client's ratchet public key.
-        client_header_pub_key (bytes, optional): Client's header public key.
-        client_next_header_pub_key (bytes, optional): Client's next header public key.
         client_nonce (bytes, optional): Client nonce.
         cleint_id_pub_key (bytes, optional): Client's identity public key.
         associated_data (bytes, optional): Associated data for decryption.
@@ -186,8 +162,6 @@ def decrypt_payload(
                 client_ratchet_pub_key=client_ratchet_pub_key,
                 client_nonce=client_nonce,
                 server_nonce=server_nonce,
-                client_header_pub_key=client_header_pub_key,
-                client_next_header_pub_key=client_next_header_pub_key,
             )
 
             if use_header_encryption:
@@ -207,9 +181,8 @@ def decrypt_payload(
             logger.debug("Current state: %s", server_state)
             state = States.deserialize_json(server_state)
 
-        AD = associated_data or _generate_associated_data(
-            client_id_pub_key=client_id_pub_key,
-            server_identity_pub_key=server_identity_keypair.get_public_key(),
+        AD = associated_data or generate_associated_data_client(
+            CI_sig_pk=client_id_pub_key, SI_pk=server_identity_keypair.get_public_key()
         )
         if use_header_encryption:
             plaintext = _decrypt_with_header_encrypted_ratchet(
