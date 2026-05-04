@@ -49,7 +49,7 @@ update)
   git pull
   source venv/bin/activate
   pip install --upgrade pip
-  pip install -r requirements.txt
+  pip install --force-reinstall -r requirements.txt
   make grpc-compile
   make download-platforms
   systemctl daemon-reload
