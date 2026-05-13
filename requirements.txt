@@ -7,16 +7,16 @@ grpc-interceptor==0.15.4
 grpcio==1.80.0
 grpcio-testing==1.80.0
 grpcio-tools==1.80.0
-gunicorn==25.3.0
+gunicorn==26.0.0
 mysqlclient==2.2.8
 mysql-connector-python==9.7.0
 nest-asyncio==1.6.0
 peewee==4.0.5
-phonenumbers==9.0.29
+phonenumbers==9.0.30
 pycryptodome==3.23.0
 jwt==1.4.0
 pytest==9.0.3
-requests==2.33.1
+requests==2.34.0
 smswithoutborders_libsig @ git+https://github.com/smswithoutborders/lib_signal_double_ratchet_python.git@v0.2.0
 tqdm==4.67.3
-twilio==9.10.5
+twilio==9.10.9
