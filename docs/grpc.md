@@ -6,6 +6,7 @@
   - [Version 1](#version-1)
 - [Prerequisites](#prerequisites)
 - [Usage](#usage)
+  - [Python client examples](#python-client-examples)
   - [Public Functions](#public-functions)
     - [Create an Entity](#create-an-entity)
       - [Initiate Creation](#initiate-creation)
@@ -103,6 +104,59 @@ python3 grpc_internal_server.py
 ```
 
 ## Usage
+
+### Python client examples
+
+After compiling `protos/v1/vault.proto`, Python clients can import the
+generated `vault_pb2` and `vault_pb2_grpc` modules and call the public
+`Entity` service directly.
+
+The examples below use an insecure local development channel. Use
+`grpc.secure_channel()` with the required credentials when connecting to a TLS
+deployment.
+
+```python
+import grpc
+
+import vault_pb2
+import vault_pb2_grpc
+
+
+SERVER_ADDRESS = "127.0.0.1:6000"
+
+
+def create_entity():
+    with grpc.insecure_channel(SERVER_ADDRESS) as channel:
+        stub = vault_pb2_grpc.EntityStub(channel)
+        response = stub.CreateEntity(
+            vault_pb2.CreateEntityRequest(
+                country_code="CM",
+                phone_number="+237123456789",
+                email_address="mail@example.com",
+                password="Password@123",
+                client_publish_pub_key="x25519 client publish public key",
+                client_device_id_pub_key="x25519 client device_id public key",
+                captcha_token="captcha token",
+            )
+        )
+        print(response)
+
+
+def authenticate_entity():
+    with grpc.insecure_channel(SERVER_ADDRESS) as channel:
+        stub = vault_pb2_grpc.EntityStub(channel)
+        response = stub.AuthenticateEntity(
+            vault_pb2.AuthenticateEntityRequest(
+                phone_number="+237123456789",
+                email_address="mail@example.com",
+                password="Password@123",
+                client_publish_pub_key="x25519 client publish public key",
+                client_device_id_pub_key="x25519 client device_id public key",
+                captcha_token="captcha token",
+            )
+        )
+        print(response)
+```
 
 ## Public Functions
 
